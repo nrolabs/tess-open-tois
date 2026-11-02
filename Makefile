@@ -7,7 +7,7 @@ BATCH_SIZE ?= 64
 PRECISION ?= 0.95
 TORCH_INDEX := https://download.pytorch.org/whl/cu128
 
-.PHONY: help setup catalog curves train candidates test
+.PHONY: help setup catalog curves train candidates report test
 help:
 	@echo 'make setup       Install environments (CNN + TRICERATOPS) and test the GPU (PYTHON=/path/python3)'
 	@echo 'make catalog     Download TOIs and known signals (CTOIs, planets, TCEs, binaries)'
@@ -16,6 +16,8 @@ help:
 	@echo 'make train       Cross-validation by star, final ensemble and injection-recovery on the GPU'
 	@echo 'make candidates  Search signals (BLS), classify, run false positive tests and compute FPP'
 	@echo '                 TIC=... one star; FIELD=1 non-TOI stars only; PERIOD= EPOCH= DURATION= vets one event'
+	@echo 'make report      CTOI package for one event: MCMC fit, figures, LaTeX/PDF, ExoFOP row (TIC=...)'
+	@echo '                 Best event of reports/candidates/<TIC>.json, or PERIOD= EPOCH= DURATION='
 	@echo 'make test        Local tests, no network'
 
 setup:
@@ -37,6 +39,9 @@ train:
 
 candidates:
 	$(PY) tess.py candidates $(if $(TIC),--tic $(TIC)) $(if $(FIELD),--field) $(if $(PERIOD),--period $(PERIOD) --epoch $(EPOCH) --duration $(DURATION))
+
+report:
+	$(PY) tess.py report --tic $(TIC) $(if $(PERIOD),--period $(PERIOD) --epoch $(EPOCH) --duration $(DURATION))
 
 test:
 	$(PY) -m unittest discover -s tests -v

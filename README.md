@@ -45,6 +45,7 @@ make candidates
 | `make curves FIELD=100` | Downloads 100 **non-TOI** stars with ≥30 sectors (fixed sample, all sectors) to search for new planets |
 | `make train` | Cross-validation by star, final ensemble, calibration and injection-recovery |
 | `make candidates` | Searches every downloaded star (BLS on the GPU); `TIC=...` for one star; `FIELD=1` for the non-TOI sample only |
+| `make report TIC=...` | CTOI package for the best event of a star (or `PERIOD= EPOCH= DURATION=`): MCMC fit, figures, LaTeX/PDF, ExoFOP row |
 | `make test` | Local tests, no network |
 
 Vet a specific event (period in days, epoch in BJD TDB, duration in hours):
@@ -69,6 +70,7 @@ the interpreter) and the pipeline calls it as a subprocess.
 | `search.py` | GPU BLS search, candidate pipeline, injection-recovery |
 | `single.py` | Single- and duo-transit search for long periods, CCD common-mode systematics test |
 | `pixels.py` | Difference images from target pixel files: transit source location |
+| `report.py` | Candidate report: MCMC transit fit, figures, LaTeX/PDF, ExoFOP CTOI row |
 | `fpp.py` | TRICERATOPS runner (isolated environment) |
 
 ## Data collection
@@ -280,6 +282,40 @@ Check on TFOP dispositions (one sector each, the one closest to the catalogue ep
 | Confirmed planets | 5 of 15 | **0** | 1.5–4″, 0.2–1.1σ |
 
 Neighbours closer than about half a pixel are beyond this test and are left to TRICERATOPS.
+
+## Candidate report (`report.py`)
+
+`make report TIC=...` turns the best event of `reports/candidates/<TIC>.json` (or a given ephemeris,
+which is first vetted, pixel-tested and FPP-scored like a search signal) into a folder
+`reports/ctoi/TIC<tic>-<search>-<T0>/` with:
+
+- an MCMC fit with a limb-darkened model (batman, quadratic law with Kipping q1/q2; mid-transit
+  time, period, Rp/R*, impact parameter, stellar density, flux offset and white noise), sampled
+  with emcee using differential-evolution moves until the chain exceeds 50 autocorrelation times;
+  errors are scaled by the time-averaging β factor for correlated noise; single events fit the
+  shape at a fixed period (shortest allowed), duos at the best alias;
+- derived parameters with stellar radius and Teff drawn from the TIC v8 errors: depth, T14, a/R*,
+  inclination, planet radius, semi-major axis, equilibrium temperature, insolation;
+- TRICERATOPS rerun with 10 Monte Carlo runs (the search uses 3; single runs scatter widely);
+- figures (light curve, folded fit and residuals, odd/even, phase curve, difference image,
+  posteriors), `report.tex` compiled to `report.pdf` (author and institution in `report.py`),
+  `summary.json`, `posterior.npz`, and `ctoi.csv` with the column names of the ExoFOP CTOI table.
+
+Nothing is submitted: the CTOI is uploaded by the user on ExoFOP with their own account (check the
+current upload template there).
+
+Validation on the confirmed planet TOI-1194.01 (catalogue ephemeris, 9 sectors, 93 transits):
+
+| Parameter | This fit | TOI catalogue |
+|---|---|---|
+| Period (d) | 2.3106447 ± 0.0000003 | 2.3106428 ± 0.0000009 |
+| Planet radius (R⊕) | 9.11 ± 0.55 | 8.77 ± 0.50 |
+| Depth (ppm) | 6525 ± 38 | 6911 ± 110 |
+| T14 (h) | 1.622 ± 0.010 | 1.294 ± 0.044 |
+| Impact parameter | 0.832 ± 0.009 | — |
+
+Radius and period agree. The grazing geometry (b ≈ 0.83) explains the depth and duration
+differences with the quick SPOC estimates: the folded data show first to last contact over ~1.6 h.
 
 ## Generated files
 

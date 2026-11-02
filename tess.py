@@ -1,4 +1,4 @@
-"""Pipeline CLI: catalog, light curves, training and candidate search."""
+"""Pipeline CLI: catalog, light curves, training, candidate search and candidate reports."""
 import argparse
 
 import data
@@ -12,6 +12,12 @@ def train(args):
 def candidates(args):
     from search import run_candidates
     run_candidates(args)
+
+
+def report(args):
+    import report as module
+    module.AUTHOR = args.author
+    module.make_report(args)
 
 
 def main():
@@ -40,8 +46,17 @@ def main():
     s.add_argument('--field', action='store_true', help='Only the non-TOI stars downloaded with make curves FIELD=N')
     s.add_argument('--workers', type=int, default=4, help='Parallel processes (each uses the GPU for BLS)')
     s.set_defaults(func=candidates)
+    r = sub.add_parser('report', help='MCMC transit fit, figures, LaTeX/PDF report and ExoFOP CTOI row')
+    r.add_argument('--tic', type=int, required=True)
+    r.add_argument('--event', type=int, help='Index of the event in reports/candidates/<TIC>.json (default: best tier)')
+    r.add_argument('--period', type=float, help='Days; with --epoch and --duration, evaluate a given event')
+    r.add_argument('--epoch', type=float, help='BJD TDB')
+    r.add_argument('--duration', type=float, help='Hours')
+    r.add_argument('--steps', type=int, default=60000, help='Maximum MCMC steps per walker (stops earlier once converged)')
+    r.add_argument('--author', default='Isak Paulo de Andrade Ruas')
+    r.set_defaults(func=report)
     args = p.parse_args()
-    if args.command == 'candidates':
+    if args.command in ('candidates', 'report'):
         given = [args.period, args.epoch, args.duration]
         if any(v is not None for v in given) and (None in given or args.tic is None):
             p.error('--period, --epoch and --duration require all three values and --tic')
