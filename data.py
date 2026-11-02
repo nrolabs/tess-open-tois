@@ -9,6 +9,8 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
+
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / 'data'
 CAT = DATA / 'catalogs' / 'toi.json'
@@ -105,6 +107,45 @@ def resume_download(url, output, attempts=6):
             part.replace(output)
             return
     raise RuntimeError(f'Download failed {url}: {result.stderr.strip()}')
+
+
+def parallel_download(url, output, parts=16):
+    """Large file in byte ranges over parallel connections (the archive limits each connection to
+    ~50 KB/s; the link carries far more). Each range resumes on its own; falls back to one stream."""
+    from concurrent.futures import ThreadPoolExecutor
+    head = subprocess.run(['curl', '--fail', '--silent', '--head', '--location', '--connect-timeout', '15', url],
+                          capture_output=True, text=True)
+    sizes = re.findall(r'(?im)^content-length:\s*(\d+)', head.stdout)
+    size = int(sizes[-1]) if head.returncode == 0 and sizes else 0
+    if size < 4 * 2 ** 20:
+        return resume_download(url, output)
+    edges = np.linspace(0, size, parts + 1).astype(int)
+    pieces = [output.with_suffix(output.suffix + f'.part{i}') for i in range(parts)]
+
+    def fetch(i):
+        lo, hi = edges[i], edges[i + 1] - 1
+        for _ in range(6):
+            have = pieces[i].stat().st_size if pieces[i].exists() else 0
+            if have >= hi - lo + 1:
+                return
+            result = subprocess.run(['curl', '--fail', '--silent', '--show-error', '--location',
+                                     '--connect-timeout', '15', '--speed-limit', '1000', '--speed-time', '120',
+                                     '--range', f'{lo + have}-{hi}', url], capture_output=True)
+            with pieces[i].open('ab') as f:
+                f.write(result.stdout)
+        if pieces[i].stat().st_size < hi - lo + 1:
+            raise RuntimeError(f'Download failed {url} (range {lo}-{hi})')
+    with ThreadPoolExecutor(parts) as pool:
+        list(pool.map(fetch, range(parts)))
+    tmp = output.with_suffix(output.suffix + '.part')
+    with tmp.open('wb') as f:
+        for piece in pieces:
+            f.write(piece.read_bytes())
+    if tmp.stat().st_size != size:
+        raise RuntimeError(f'Download size mismatch {url}')
+    tmp.replace(output)
+    for piece in pieces:
+        piece.unlink()
 
 
 def spoc_tces():

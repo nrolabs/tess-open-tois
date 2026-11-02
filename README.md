@@ -67,6 +67,8 @@ the interpreter) and the pipeline calls it as a subprocess.
 | `vetting.py` | False positive tests and the CNN scalar features |
 | `neural.py` | Dataset with per-star cache, CNN, cross-validated training, inference |
 | `search.py` | GPU BLS search, candidate pipeline, injection-recovery |
+| `single.py` | Single- and duo-transit search for long periods, CCD common-mode systematics test |
+| `pixels.py` | Difference images from target pixel files: transit source location |
 | `fpp.py` | TRICERATOPS runner (isolated environment) |
 
 ## Data collection
@@ -215,6 +217,69 @@ reported on the other half with different injections. A star with an 8-year base
 periods) takes ~3 min. The training report measures recovery of the full pipeline (BLS, vetting and
 CNN).
 
+## Long-period search (`single.py`)
+
+BLS needs several transits; a planet beyond ~100 days leaves one to three in a multi-year light
+curve. `make candidates` therefore also searches every star for isolated events, after masking
+the BLS signals and every catalogued transit:
+
+- **Detection**: 10-minute bins detrended by a biweight of three durations, then a matched box
+  filter at every time for durations of 2–25 h, with each sector's correlated noise at that
+  duration (GPU, float64). Events at single-event SNR ≥ 8, up to six per star.
+- **Vetting of each event**: the same tests as periodic signals where they apply (SNR, size,
+  centroid source location, crowding), on the sectors holding the event, plus
+  - distance to a data gap or segment end (ramps): fail within 0.5 d;
+  - symmetry of the two halves of the event: fail above 4σ;
+  - **V shape fails**: with no odd/even or secondary test, it is the only handle on grazing binaries;
+  - **CCD common mode**: the median normalized flux of all downloaded stars on the same sector,
+    camera and CCD (`data/common_mode.npz`, 30-minute bins); a simultaneous dip above 4σ marks the
+    event as instrumental. This test also applies to BLS signals;
+  - **per-star noise ceiling**: the same search on the star's inverted light curve gives the
+    strongest dip its own noise produces (variability, systematics and red noise make dips and
+    bumps alike); the event must be stronger.
+- **Periods**: for an isolated event, the periods the coverage allows (a predicted transit on
+  covered data without a dip excludes the period) and the period of a central circular transit
+  of that duration around the star. Two events with depths within 3σ and durations within a
+  factor 1.5 form a **duo**: periods Δt/n, pruned by coverage, ranked first by the stellar density
+  (aliases needing a period more than 4× shorter than the density implies are disfavoured), then
+  shortest first. The duo is vetted again folded at the best alias.
+- **Tiers**: no CNN (it was trained on folded periodic signals). TRICERATOPS runs on every event
+  that passes vetting, with the best alias (duos) or the shortest allowed period (singles); a
+  single event is never `strong`, because its period is unknown. Tiers carry `[single]` or `[duo]`.
+
+Calibration on the inverted light curves of the 100 field stars (pure noise; instrumental common
+dips appear with the opposite sign there and are counted accordingly):
+
+| Single-event SNR | Noise events | Pass vetting, before the last two tests | Pass vetting |
+|---|---|---|---|
+| ≥ 6 | 394 | 28 | 2 |
+| ≥ 8 | 237 | 17 | **1** |
+| ≥ 10 | 159 | 11 | 0 |
+
+The V-shape rule and the noise ceiling are physical rules, not tuned on these numbers; the
+calibration only chose the SNR threshold (8: about one false event per 100 stars).
+INJECTION_PLACEHOLDER
+
+## Pixel-level source test (`pixels.py`)
+
+Light curve files hold only the aperture sum and its centroid. For every signal that passes
+vetting (and the CNN, for periodic ones), the SPOC target pixel files of up to three sectors with
+transits are downloaded (~50 MB each, in 16 parallel byte ranges: the archive limits each
+connection to ~50 KB/s), and the difference image (out of transit minus in transit, ingress and
+egress excluded; error from the scatter between transits) is fitted with a Gaussian. The offset of
+that source from the target's catalogue position in the same stamp (WCS, 0.1 px systematic floor)
+is combined over sectors; **> 4σ and > 0.5 px (~10″) fails**, > 3σ and > 0.3 px warns. Images
+with a fitted amplitude below 5σ are not used.
+
+Check on TFOP dispositions (one sector each, the one closest to the catalogue epoch):
+
+| Group | Usable difference image | Failed (offset) | Offsets |
+|---|---|---|---|
+| FPs whose ExoFOP comment says NEB / off-target / centroid offset | 13 of 15 | **7** (+1 warning) | missed ones are within ~10″ |
+| Confirmed planets | 5 of 15 | **0** | 1.5–4″, 0.2–1.1σ |
+
+Neighbours closer than about half a pixel are beyond this test and are left to TRICERATOPS.
+
 ## Generated files
 
 | Path | Content |
@@ -242,28 +307,33 @@ CNN).
 - The search only covers downloaded stars. There are 585,858 non-TOI stars with 120 s light curves
   (~3 TB); `FIELD=N` downloads a fixed sample of the 4,662 with ≥30 sectors (none reach 50), with all
   sectors. SPOC already searched these stars: the discovery space is in weak signals that only
-  appear when sectors are combined.
+  appear when sectors are combined, and in long periods with one to three transits.
 - SPOC 120 s light curves only; FFIs (QLP, TESS-SPOC) and full pixel data are not used.
-- Injection-recovery uses trapezoidal transits without limb darkening, one sector at a time.
+- Injection-recovery uses trapezoidal transits without limb darkening (one sector at a time for
+  periodic signals, all sectors for long-period events).
 - Systems with strong transit timing variations (TTV) may fail the ephemeris tests.
 - The project never submits anything automatically to ExoFOP, Zooniverse or any other service.
 
-## Roadmap (noted, not implemented)
+## Roadmap
 
-Evolution proposal discussed on 2026-11-01. These are priorities, not demonstrated improvements.
+Updated on 2026-11-02. Done items are kept with the evidence that closed them.
 
-| Priority | Feature | Expected benefit | Notes |
-|---|---|---|---|
-| P0 | Difference images and pixel analysis | Identify the true transit source | Needs TPFs (~10× the light curves): download only for candidates |
-| P0 | Training on blind-search signals | Fewer false positives outside the TOI population | Population: SPOC TCEs ([TCE bulk](https://archive.stsci.edu/tess/bulk_downloads/bulk_downloads_tce.html)) + [TESS eclipsing binary catalog](https://cdsarc.cds.unistra.fr/ftp/J/ApJS/258/16) (Prša et al. 2022) |
-| P0 | Benchmark against ExoMiner++ | Measurable comparison | Published scores for 147,568 TCEs S1–67 ([Zenodo](https://zenodo.org/record/15466292), [paper](https://arxiv.org/abs/2502.09790)); same TCEs and labels; superiority is not guaranteed |
-| P1 | TLS + BLS + single-transit search | Signals BLS misses | Single transits: long-period planets |
-| P1 | FFI data and 20 s light curves | More stars and signals | Much larger volume; limited by bandwidth and disk |
-| P1 | Temporal model with attention | Dependencies across events and sectors | Evaluate against the current CNN in the benchmark |
-| P1 | TTV handling | Planets that are not strictly periodic | |
-| P1 | Correlated noise model | Sensitivity to weak signals | |
-| P2 | Heterogeneous ensemble | Combine different errors | |
-| P2 | Uncertainty and out-of-distribution detection | Avoid overconfidence | |
+| Priority | Item | Status |
+|---|---|---|
+| P0 | Benchmark against ExoMiner++ | Open. Published scores for 147,568 TCEs S1–67 ([Zenodo](https://zenodo.org/record/15466292), [paper](https://arxiv.org/abs/2502.09790)); same TCEs and labels |
+| P1 | Weak signals (SNR 7–10), where TLS still recovers more | Open. A limb-darkened template was tried and rejected (see Transit search) |
+| P1 | Classifier for single and duo events | Open. Today they are vetted by physical rules only |
+| P1 | TTV handling | Open. Strong TTVs may fail the ephemeris and BLS assumptions |
+| P1 | FFI light curves (QLP, TESS-SPOC) and 20 s data | Open. Many more stars; limited by bandwidth and disk |
+| P2 | Temporal model with attention; heterogeneous ensemble | Open. Evaluate against the current CNN |
+| P2 | Uncertainty and out-of-distribution detection | Open |
+| — | Pixel-level source localization (difference images) | **Done** (`pixels.py`): 7/13 TFOP NEBs failed, 0/5 planets |
+| — | Cross-match with TCEs, CTOIs, published planets, binaries | **Done** (`known.json`) |
+| — | Single- and duo-transit search | **Done** (`single.py`) |
+| — | Instrumental systematics shared by stars on a CCD | **Done** (common-mode test) |
+| — | Training on blind-search noise | **Not needed**: on 200 inverted single-sector curves the full pipeline selected 1 false alarm (0.5%); the CNN rejected 19 of the 20 noise signals that passed vetting |
+| — | Red-noise-aware detection statistic | **Done** (per-duration correlated noise in BLS and single events) |
+| — | TRICERATOPS working offline for pixel geometry | **Done** (`fpp.py`) |
 
 ### Research ideas (novelty not yet verified)
 

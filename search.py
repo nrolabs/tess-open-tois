@@ -10,6 +10,7 @@ from data import (ROOT, DATA, load_star, select_sectors, downloaded_stars, star_
                   save_json)
 from lightcurve import prepare, trend, segments, wrap, SPAWN, GPU_WORKERS
 from vetting import analyze, stellar_density, G, DAY
+from single import single_star_events, add_common_mode
 
 FPP_PYTHON = ROOT / '.venv-fpp' / 'bin' / 'python'
 REPORTS = ROOT / 'reports' / 'candidates'
@@ -320,6 +321,26 @@ def known_masks(known, event=None):
             and (event is None or match_known(event, [k]) is None)]
 
 
+def match_single(event, known):
+    """Match an isolated event to a catalogued signal: a predicted transit of a periodic one (within
+    the propagated 3σ ephemeris drift) or the event time of a single-transit CTOI."""
+    t0, duration = event['epoch_bjd'], event['duration_hours'] / 24
+    for k in known:
+        p, e = k['period'], k['epoch']
+        if e is None or not k['transiting']:
+            continue
+        d = max((k['duration_hours'] or 0) / 24, duration)
+        if p is None:
+            hit = abs(t0 - e) < d + 3 * (k.get('epoch_err') or 0)
+        else:
+            drift = 3 * np.hypot(abs(t0 - e) / p * (k.get('period_err') or 0), k.get('epoch_err') or 0)
+            hit = drift < p / 4 and abs(wrap(t0 - e, p)) < d + drift
+        if hit:
+            return {'source': k['source'], 'name': k['name'], 'toi': k.get('toi'),
+                    'disposition': k['disposition'], 'period_ratio': None, 'phase_checked': True}
+    return None
+
+
 def star_events(tic, given=None):
     """Signals of one star (BLS search or a given event) with features and vetting tests."""
     star = load_star(tic)
@@ -337,9 +358,20 @@ def star_events(tic, given=None):
         try:
             x, metrics = analyze(star, event['period_days'], event['epoch_bjd'], event['duration_hours'], masks)
         except ValueError as exc:
-            out.append({'tic': tic, **event, 'known': known, 'error': str(exc)})
+            out.append({'tic': tic, 'search': 'bls', **event, 'known': known, 'error': str(exc)})
             continue
-        out.append({'tic': tic, **event, 'known': known, 'masks': masks, 'x': x, 'metrics': metrics})
+        add_common_mode(star, metrics, event['period_days'], event['epoch_bjd'], event['duration_hours'])
+        out.append({'tic': tic, 'search': 'bls', **event, 'known': known, 'masks': masks, 'x': x,
+                    'metrics': metrics})
+    if not given:
+        # Long periods: isolated events and pairs, with every periodic signal (ours and catalogued) masked.
+        periodic = [(e['period_days'], e['epoch_bjd'], e['duration_hours']) for e in events]
+        for e in single_star_events(star, periodic + known_masks(known_here), known_here):
+            if e['search'] == 'single' and 'periods' in e:
+                p = e['periods']
+                # TRICERATOPS needs a period: the shortest one the coverage and the stellar density allow.
+                e['fpp_period_days'] = max(p['min_period_days'] or 0, p['density_period_days'] or 0) or None
+            out.append({'tic': tic, **e})
     return out
 
 
@@ -367,7 +399,9 @@ def fpp_job(event):
     phase = np.bincount(inverse, prep['phase'][near]) / counts
     flux = 1 + np.bincount(inverse, prep['corrected'][near]) / counts
     outside = np.abs(phase) > duration / 2
-    job = {'tic': int(event['tic']), 'sectors': [int(s) for s in sectors], 'period': period,
+    # Isolated events are analysed with a period longer than the data; TRICERATOPS gets a physical one.
+    job = {'tic': int(event['tic']), 'sectors': [int(s) for s in sectors],
+           'period': event.get('fpp_period_days') or period,
            'depth': max(m['depth_ppm'] or 0, 1) / 1e6, 'time': phase.tolist(), 'flux': flux.tolist(),
            'flux_err': float(np.std(flux[outside])) if outside.sum() > 5 else float(prep['scatter']),
            # Local SPOC files: TRICERATOPS reads pixel geometry and apertures from them instead of the network.
@@ -406,6 +440,38 @@ def tier(cnn_selected, metrics, fpp):
     return 'candidate: no FPP'
 
 
+def pixel_job(event):
+    """Difference-image source test for a vetted event (downloads the TPFs it needs)."""
+    from pixels import pixel_test
+    try:
+        star = load_star(event['tic'])
+        if event['search'] == 'single':
+            return pixel_test(star, None, event['epoch_bjd'], event['duration_hours'], [event['epoch_bjd']])
+        if event['search'] == 'duo':
+            return pixel_test(star, None, event['epoch_bjd'], event['duration_hours'], event['events_bjd'])
+        m = event['metrics']
+        return pixel_test(star, m['period_days'], m['epoch_bjd'], m['duration_hours'])
+    except Exception as exc:
+        return {'error': f'{type(exc).__name__}: {exc}'[-300:]}
+
+
+def long_tier(kind, metrics, fpp):
+    """Tier of a single or duo event: no CNN (it was trained on folded periodic signals), and a single
+    event is never 'strong' because its period is unknown."""
+    label = tier(True, metrics, fpp)
+    if kind == 'single' and label.startswith('strong'):
+        label = 'candidate: likely planet'
+    return f'{label} [{kind}]'
+
+
+def code_version():
+    """Hash of the search and vetting code: reports from other versions are recomputed."""
+    import hashlib
+    return hashlib.sha256(b''.join((ROOT / f).read_bytes() for f in
+                                   ('lightcurve.py', 'vetting.py', 'search.py', 'single.py', 'pixels.py',
+                                    'data.py', 'fpp.py'))).hexdigest()[:16]
+
+
 def run_candidates(args):
     from neural import load_ensemble, score
     models, checkpoint = load_ensemble()
@@ -419,13 +485,21 @@ def run_candidates(args):
         stars = [t for t in stars if t in field]
     REPORTS.mkdir(parents=True, exist_ok=True)
     model_id = Path(ROOT / 'models' / 'transit-cnn.pt').stat().st_mtime
+    version = code_version()
     if not args.tic:
         done = {int(p.stem) for p in REPORTS.glob('*.json')
-                if json.loads(p.read_text()).get('model_mtime') == model_id}
+                if json.loads(p.read_text()).get('model_mtime') == model_id
+                and json.loads(p.read_text()).get('code_version') == version}
         stars = [t for t in stars if t not in done]
+    from single import COMMON_MODE, build_common_mode
+    everyone = downloaded_stars()
+    if not COMMON_MODE.exists() or len(np.load(COMMON_MODE)['stars']) != len(everyone):
+        print(f'Building the CCD common mode from {len(everyone)} stars (systematics test)', flush=True)
+        build_common_mode(everyone)
     print(f'{len(stars)} stars to search', flush=True)
+    from pixels import apply_pixel_test
     with ProcessPoolExecutor(max_workers=args.workers, mp_context=SPAWN) as pool, \
-            ThreadPoolExecutor(max_workers=2) as fpp_pool:
+            ThreadPoolExecutor(max_workers=2) as fpp_pool, ThreadPoolExecutor(max_workers=2) as pixel_pool:
         for n, events in enumerate(pool.map(safe_star_events, stars, [given] * len(stars)), 1):
             ok = [e for e in events if 'x' in e]
             if ok:
@@ -433,25 +507,35 @@ def run_candidates(args):
                 for e, r, c in zip(ok, raw, calibrated):
                     e['cnn_score'], e['cnn_calibrated'] = float(r), float(c)
                     e['cnn_selected'] = bool(threshold is not None and r >= threshold)
-            pending = {}
-            for e in ok:
-                if not args.no_fpp and e['metrics']['verdict'] == 'pass' and (e['cnn_selected'] or given):
-                    pending[id(e)] = fpp_pool.submit(fpp_job, e)
+            pending, pixel_pending = {}, {}
+            for e in events:
+                if 'metrics' not in e or e['metrics']['verdict'] != 'pass':
+                    continue
+                if e['search'] in ('single', 'duo') or e['cnn_selected'] or given:
+                    pixel_pending[id(e)] = pixel_pool.submit(pixel_job, e)
+                    if not args.no_fpp:
+                        pending[id(e)] = fpp_pool.submit(fpp_job, e)
             for e in events:
                 e.pop('x', None)
                 e['fpp'] = pending[id(e)].result() if id(e) in pending else None
+                if id(e) in pixel_pending:
+                    apply_pixel_test(e['metrics'], pixel_pending[id(e)].result())
                 if 'metrics' in e:
-                    e['tier'] = tier(e['cnn_selected'], e['metrics'], e['fpp'] if e['fpp'] and 'error' not in e['fpp'] else None)
+                    fpp = e['fpp'] if e['fpp'] and 'error' not in e['fpp'] else None
+                    e['tier'] = (long_tier(e['search'], e['metrics'], fpp) if e['search'] in ('single', 'duo')
+                                 else tier(e['cnn_selected'], e['metrics'], fpp))
             tic = stars[n - 1]
-            save_json(REPORTS / f'{tic}.json', {'tic': tic, 'model_mtime': model_id, 'threshold': threshold,
-                                                'events': events})
+            save_json(REPORTS / f'{tic}.json', {'tic': tic, 'model_mtime': model_id, 'code_version': version,
+                                                'threshold': threshold, 'events': events})
             for e in events:
                 if 'error' in e:
                     print(f"[{n}/{len(stars)}] TIC {tic} error: {e['error'][-200:]}", flush=True)
                 if 'tier' in e:
-                    print(f"[{n}/{len(stars)}] TIC {tic} P={e['period_days']:.4f} d "
-                          f"{e['known']['name'] if e['known'] else 'not catalogued'} "
-                          f"cnn={e['cnn_calibrated']:.3f} -> {e['tier']}", flush=True)
+                    where = (f"P={e['period_days']:.4f} d" if e['period_days'] else
+                             f"single event at BJD {e['epoch_bjd']:.3f}")
+                    cnn = f" cnn={e['cnn_calibrated']:.3f}" if e.get('cnn_calibrated') is not None else ''
+                    print(f"[{n}/{len(stars)}] TIC {tic} {e['search']} {where} "
+                          f"{e['known']['name'] if e['known'] else 'not catalogued'}{cnn} -> {e['tier']}", flush=True)
     summary()
 
 
@@ -466,17 +550,20 @@ def summary():
             known = e['known'] or {}
             # Reports from before the CTOI cross-match only carry a TOI number.
             name = known.get('name') or (f"TOI {known['toi']}" if known.get('toi') else None)
-            rows.append({'tic': e['tic'], 'tier': e['tier'], 'known': name, 'known_source': known.get('source'),
+            rows.append({'tic': e['tic'], 'search': e.get('search', 'bls'), 'tier': e['tier'], 'known': name, 'known_source': known.get('source'),
                          'known_disposition': known.get('disposition'),
-                         'period_days': m['period_days'], 'epoch_bjd': m['epoch_bjd'],
+                         'period_days': e.get('period_days'), 'epoch_bjd': m['epoch_bjd'],
+                         'aliases': len(e.get('aliases', [])) or None,
                          'duration_hours': m['duration_hours'], 'depth_ppm': m['depth_ppm'],
                          'radius_earth': m['radius_earth'], 'snr': m['snr'], 'transits': m['transits'],
-                         'cnn_calibrated': e['cnn_calibrated'], 'fpp': fpp.get('fpp'), 'nfpp': fpp.get('nfpp'),
+                         'cnn_calibrated': e.get('cnn_calibrated'), 'fpp': fpp.get('fpp'), 'nfpp': fpp.get('nfpp'),
+                         'pixel_offset_arcsec': (m.get('pixel_test') or {}).get('offset_arcsec'),
+                         'pixel_sigma': (m.get('pixel_test') or {}).get('sigma'),
                          'flags': ';'.join(f'{k}={v}' for k, v in m['flags'].items())})
     order = ['strong', 'candidate', 'inconclusive', 'rejected']
     # Unknown tiers (e.g. reports from older versions) sort last instead of failing.
     rank = lambda tier: next((i for i, o in enumerate(order) if tier.startswith(o)), len(order))
-    rows.sort(key=lambda r: (rank(r['tier']), r['known'] is not None, -r['cnn_calibrated']))
+    rows.sort(key=lambda r: (rank(r['tier']), r['known'] is not None, -(r['cnn_calibrated'] or 0)))
     if rows:
         with (ROOT / 'reports' / 'candidates.csv').open('w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=list(rows[0]))
