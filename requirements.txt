@@ -1,0 +1,7 @@
+numpy>=2.0,<3
+scipy>=1.13,<2
+scikit-learn>=1.5,<2
+astropy>=6,<9
+lightkurve>=2.5,<3
+autograd>=1.4,<2
+oktopus>=0.1,<1

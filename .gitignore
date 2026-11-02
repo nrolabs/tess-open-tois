@@ -1,0 +1,7 @@
+.venv/
+.venv-fpp/
+__pycache__/
+data/
+models/
+*.egg-info/
+reports/
