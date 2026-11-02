@@ -255,3 +255,26 @@ Evolution proposal discussed on 2026-11-01. These are priorities, not demonstrat
 | P1 | Correlated noise model | Sensitivity to weak signals | |
 | P2 | Heterogeneous ensemble | Combine different errors | |
 | P2 | Uncertainty and out-of-distribution detection | Avoid overconfidence | |
+
+### Research ideas (novelty not yet verified)
+
+Proposed on 2026-11-02. As far as we know neither has been explored systematically, but a literature
+search (arXiv/ADS) must confirm that before any implementation. Do the cheaper idea 2 first.
+
+1. **Multi-sector aperture forward model for source localization.** Every sector places the star on
+   different pixels with a different SPOC aperture and different neighbor contamination; stars with
+   ≥30 sectors give ~30 independent configurations. If the transit is on the target, the
+   crowding-corrected depth is the same in every sector; if it comes from a neighbor, the observed
+   depth follows that neighbor's flux fraction inside each aperture. Using the Gaia neighbors (as in
+   TRICERATOPS) and the APERTURE extension already stored in our FITS, predict the per-sector depth
+   for each source hypothesis and compare likelihoods. This localizes the source from light curves
+   alone, without downloading TPFs, and targets cases where the centroid test is inconclusive.
+   Related work: per-aperture depth checks (DAVE, LATTE) and TRICERATOPS use apertures, but not as a
+   joint statistical fit across tens of sectors.
+2. **Recurrence across independent SPOC DV runs as a reliability statistic.** `data/catalogs/known.json`
+   holds 341,351 TCEs from 132 DV runs (single- and multi-sector). A weak signal found once is often
+   noise; the same period and phase found independently in runs from different sectors and years is
+   much less likely to be chance. Turn the number and independence of matching runs into a
+   reliability score for each signal, including TCEs never promoted to TOI, where planets missed by
+   human triage may hide. Related work: Kepler population-level reliability (inverted/scrambled
+   light curves) and the per-TCE DV bootstrap false alarm probability, not cross-run recurrence.
