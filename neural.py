@@ -17,7 +17,7 @@ from data import (ROOT, CAT, DATA, LABELS, rows, eligible, downloaded_stars, loa
 from lightcurve import VIEWS
 from vetting import SCALARS, analyze
 
-FEATURE_VERSION = 2
+FEATURE_VERSION = 3
 INPUT_SIZE = sum(c * b for _, c, b in VIEWS) + len(SCALARS)
 MODEL = ROOT / 'models' / 'transit-cnn.pt'
 MIN_STARS = 25

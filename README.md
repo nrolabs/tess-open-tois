@@ -167,10 +167,30 @@ light curves, where no astrophysical transit exists:
 | Now | 12–18% | 67–73% | 88–90% | 93–98% | 98–99% | 19% |
 
 Higher false alarms are the intended trade-off: a missed planet is lost for good, while a false
-alarm still goes through vetting, the CNN and TRICERATOPS. Not yet state of the art (the Kepler TPS
-reaches ~100% from MES ≈ 10–12): the next steps are robust biweight detrending and correcting edge
-ramps instead of vetoing them. A star with an 8-year baseline (473 thousand periods) takes ~3 min.
-The training report measures recovery of the full pipeline (BLS, vetting and CNN).
+alarm still goes through vetting, the CNN and TRICERATOPS.
+
+**Detrending** is a Tukey biweight in a 0.75-day sliding time window (the wotan method), on the GPU
+in float64; it matches wotan within a median 0.8 ppm and runs 7.7× faster. The window was chosen on a
+frozen tuning set (paired comparison of 0.5, 0.75, 1.0 and 1.5 d at matched false-alarm rate).
+
+**Benchmark against the reference tools** (wotan biweight + TLS 2.0.4), on a held-out set of 300
+single-sector injections into planet-host stars never used for tuning, each pipeline taking its single
+best peak, evaluated once, at the same false-alarm rate on inverted light curves:
+
+| Method | Recovery at 1% FA | 5% FA | 10% FA | SNR 7–10 | SNR 10–15 | SNR 15–25 | SNR > 25 |
+|---|---|---|---|---|---|---|---|
+| This pipeline (biweight + GPU BLS) | 81% | 85% | 87% | 0% | 69% | 91% | 92% |
+| wotan + TLS (SDE statistic) | 81% | 83% | 85% | 20% | 50% | 91% | 90% |
+
+The two are at the same level; with 182 detectable cases, differences of a few points are within the
+statistical uncertainty. TLS does better on the weakest signals (SNR 7–10), this pipeline on SNR 10–15.
+A limb-darkened matched filter (the TLS idea) was evaluated and not adopted: for small planets its
+theoretical SNR gain over the optimal box is only ~1%.
+
+To avoid overfitting, settings are tuned only on one half of the host stars (split by TIC hash) and
+reported on the other half with different injections. A star with an 8-year baseline (473 thousand
+periods) takes ~3 min. The training report measures recovery of the full pipeline (BLS, vetting and
+CNN).
 
 ## Generated files
 

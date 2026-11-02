@@ -32,12 +32,14 @@ DURATION_HOURS = np.array([.5, .75, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 13, 16, 2
 PERIOD_EDGES = (.5, .8, 1.2, 1.8, 2.7, 4, 6, 9, 13.5, 20, 30, 45, 70, 100)
 # Typical central transit duration for a Sun-like star, used to space the period grid.
 SOLAR_DURATION = lambda period: .54 * (period / 365.25) ** (1 / 3)
+# Blind-search detrending window in days (biweight), chosen by injection-recovery.
+FLATTEN_WINDOW = .75
 
 
 def flatten(time, flux, sector):
-    """Detrend without knowing the transit (~1 day median) and clip flares."""
+    """Detrend without knowing the transit (biweight, FLATTEN_WINDOW days) and clip flares."""
     cadence = np.median(np.diff(time)[np.diff(time) > 0])
-    base = trend(time, flux, np.isfinite(flux), segments(time, sector, cadence), int(1. / cadence) | 1)
+    base = trend(time, flux, np.isfinite(flux), segments(time, sector, cadence), FLATTEN_WINDOW)
     rel = flux / base - 1
     noise = 1.4826 * np.nanmedian(np.abs(rel - np.nanmedian(rel)))
     rel[rel > 4 * noise] = np.nan

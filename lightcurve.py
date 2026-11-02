@@ -8,19 +8,53 @@ def wrap(phase, period):
     return (phase + period / 2) % period - period / 2
 
 
+BIWEIGHT_C = 5.
+BIWEIGHT_ITERATIONS = 10
+# Elements per GPU block: ~6 float64 arrays of this size per process, so 4 parallel processes fit in 8 GB.
+BIWEIGHT_BLOCK = 4e6
+
+
 def trend(time, values, base, boundaries, window):
-    """Running median per segment, interpolating over points outside base."""
+    """Tukey biweight location in a sliding time window of `window` days, per segment (the wotan method).
+
+    Robust to outliers and to the transit itself; points outside `base` (protected transits, other
+    planets) get zero weight, so no interpolation is needed. Near gaps the window simply holds fewer
+    points, without padding. Runs on the GPU in float64 when available.
+    """
     import numpy as np
-    from scipy.ndimage import median_filter
+    import torch
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     result = np.full(len(time), np.nan)
     for a, b in zip(boundaries[:-1], boundaries[1:]):
-        ok = base[a:b] & np.isfinite(values[a:b])
+        t, v = time[a:b], values[a:b]
+        ok = base[a:b] & np.isfinite(v)
         if ok.sum() < 10:
             continue
-        t = time[a:b]
-        interpolated = np.interp(t, t[ok], values[a:b][ok])
-        size = max(3, min(window, (b - a) // 2 * 2 - 1))
-        result[a:b] = median_filter(interpolated, size=size, mode='nearest')
+        lo = np.searchsorted(t, t - window / 2)
+        hi = np.searchsorted(t, t + window / 2, side='right')
+        width = int((hi - lo).max())
+        x_all = torch.as_tensor(np.where(ok, v, 0.), dtype=torch.float64, device=device)
+        ok_all = torch.as_tensor(ok, device=device)
+        offsets = torch.arange(width, device=device)
+        rows = max(1, int(BIWEIGHT_BLOCK // width))
+        for start in range(0, b - a, rows):
+            r_lo = torch.as_tensor(lo[start:start + rows], device=device)
+            r_hi = torch.as_tensor(hi[start:start + rows], device=device)
+            index = r_lo[:, None] + offsets[None, :]
+            inside = index < r_hi[:, None]
+            index = index.clamp(max=b - a - 1)
+            x = x_all[index]
+            mask = inside & ok_all[index]
+            location = torch.where(mask, x, torch.full_like(x, float('nan'))).nanmedian(1).values
+            for _ in range(BIWEIGHT_ITERATIONS):
+                deviation = torch.where(mask, (x - location[:, None]).abs(), torch.full_like(x, float('nan')))
+                scale = BIWEIGHT_C * deviation.nanmedian(1).values
+                u = (x - location[:, None]) / scale.clamp(min=1e-12)[:, None]
+                weight = torch.where(mask & (u.abs() < 1), (1 - u ** 2) ** 2, torch.zeros_like(u))
+                total = weight.sum(1)
+                updated = (weight * x).sum(1) / total.clamp(min=1e-300)
+                location = torch.where(total > 0, updated, location)
+            result[a + start:a + start + len(location)] = location.cpu().numpy()
     return result
 
 
@@ -50,7 +84,8 @@ def prepare(time, flux, period, epoch, duration_hours, sector=None, masks=()):
     if (inside & ~others).sum() < 5 or outside.sum() < 100:
         raise ValueError('Not enough coverage of the predicted transit')
     cadence = np.median(np.diff(time)[np.diff(time) > 0])
-    window = max(11, int(max(1, 5 * duration) / cadence) | 1)
+    # Window of 3 transit durations (wotan recommendation), at least half a day; the transit has zero weight.
+    window = max(.5, 3 * duration)
     base = trend(time, flux, outside, segments(time, sector, cadence), window)
     corrected = np.divide(flux, base, out=np.full(len(flux), np.nan), where=np.isfinite(base) & (base != 0)) - 1
     corrected[others] = np.nan
