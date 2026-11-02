@@ -480,16 +480,90 @@ def json_safe(value):
     return value
 
 
+# Code that decides the results. Orchestration (star selection, downloads, saving, reports, CLI) is
+# left out, so changing it does not invalidate finished stars.
+SCIENCE_FILES = ('lightcurve.py', 'vetting.py', 'single.py', 'pixels.py', 'fpp.py')
+ORCHESTRATION = {'search.py': {'run_candidates', 'summary', 'code_version', 'json_safe', 'injection_recovery',
+                               'injection_trial', 'planet_hosts', 'SCIENCE_FILES', 'ORCHESTRATION',
+                               'DATA_ANALYSIS', 'EQUIVALENT_VERSIONS'}}
+DATA_ANALYSIS = {'CURVE_VERSION', 'rows', 'eligible', 'positive', 'current', 'target_pixel', 'load_star',
+                 'select_sectors', 'star_tois', 'known_signals_all', 'known_by_star', 'known_signals', 'masks_for'}
+
+
+# Versions from older hashing schemes whose results equal the current code (no result code changed
+# since): their reports stay valid. Empty this whenever result code changes.
+EQUIVALENT_VERSIONS = {'675164602aa13526'}
+
+
 def code_version():
-    """Hash of the search and vetting code: reports from other versions are recomputed."""
+    """Hash of the code that decides the results, compared as syntax trees without docstrings, so
+    comments, documentation and orchestration changes keep finished reports valid."""
+    import ast
     import hashlib
-    return hashlib.sha256(b''.join((ROOT / f).read_bytes() for f in
-                                   ('lightcurve.py', 'vetting.py', 'search.py', 'single.py', 'pixels.py',
-                                    'data.py', 'fpp.py'))).hexdigest()[:16]
+
+    def normalized(node):
+        for child in ast.walk(node):
+            body = getattr(child, 'body', None)
+            if (isinstance(body, list) and body and isinstance(body[0], ast.Expr)
+                    and isinstance(getattr(body[0], 'value', None), ast.Constant)
+                    and isinstance(body[0].value.value, str)):
+                child.body = body[1:] or [ast.Pass()]
+        return ast.dump(node)
+
+    def name(node):
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            return node.name
+        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
+            return node.targets[0].id
+        return None
+
+    digest = hashlib.sha256()
+    for f in SCIENCE_FILES:
+        digest.update(normalized(ast.parse((ROOT / f).read_text())).encode())
+    for node in ast.parse((ROOT / 'search.py').read_text()).body:
+        if name(node) not in ORCHESTRATION['search.py']:
+            digest.update(normalized(node).encode())
+    for node in ast.parse((ROOT / 'data.py').read_text()).body:
+        if name(node) in DATA_ANALYSIS:
+            digest.update(normalized(node).encode())
+    return digest.hexdigest()[:16]
+
+
+def complete_events(events, models, checkpoint, given, no_fpp, fpp_pool, pixel_pool):
+    """Everything that decides a star's results after the search: CNN scores and selection, which
+    vetted events get the pixel test and TRICERATOPS, and the final tiers (in place)."""
+    from neural import score
+    from pixels import apply_pixel_test
+    threshold = checkpoint['threshold']
+    ok = [e for e in events if 'x' in e]
+    if ok:
+        raw, calibrated = score(models, checkpoint, np.stack([e['x'] for e in ok]))
+        for e, r, c in zip(ok, raw, calibrated):
+            e['cnn_score'], e['cnn_calibrated'] = float(r), float(c)
+            e['cnn_selected'] = bool(threshold is not None and r >= threshold)
+    pending, pixel_pending = {}, {}
+    for e in events:
+        if 'metrics' not in e or e['metrics']['verdict'] != 'pass':
+            continue
+        if e['search'] in ('single', 'duo') or e['cnn_selected'] or given:
+            pixel_pending[id(e)] = pixel_pool.submit(pixel_job, e)
+            if not no_fpp:
+                pending[id(e)] = fpp_pool.submit(fpp_job, e)
+    for e in events:
+        e.pop('x', None)
+        e['fpp'] = pending[id(e)].result() if id(e) in pending else None
+        if id(e) in pixel_pending:
+            apply_pixel_test(e['metrics'], pixel_pending[id(e)].result())
+        if 'metrics' in e:
+            fpp = e['fpp'] if e['fpp'] and 'error' not in e['fpp'] else None
+            e['tier'] = (long_tier(e['search'], e['metrics'], fpp) if e['search'] in ('single', 'duo')
+                         else tier(e['cnn_selected'], e['metrics'], fpp))
 
 
 def run_candidates(args):
-    from neural import load_ensemble, score
+    """Orchestration only (star selection, parallelism, resume, saving, log): results are decided in
+    star_events() and complete_events(), which the code version covers."""
+    from neural import load_ensemble
     models, checkpoint = load_ensemble()
     threshold = checkpoint['threshold']
     given = None
@@ -508,7 +582,7 @@ def run_candidates(args):
     if not args.tic:
         done = {int(p.stem) for p in REPORTS.glob('*.json')
                 if json.loads(p.read_text()).get('model_mtime') == model_id
-                and json.loads(p.read_text()).get('code_version') == version}
+                and json.loads(p.read_text()).get('code_version') in {version} | EQUIVALENT_VERSIONS}
         stars = [t for t in stars if t not in done]
     from single import COMMON_MODE, build_common_mode
     everyone = downloaded_stars()
@@ -516,33 +590,10 @@ def run_candidates(args):
         print(f'Building the CCD common mode from {len(everyone)} stars (systematics test)', flush=True)
         build_common_mode(everyone)
     print(f'{len(stars)} stars to search', flush=True)
-    from pixels import apply_pixel_test
     with ProcessPoolExecutor(max_workers=args.workers, mp_context=SPAWN) as pool, \
             ThreadPoolExecutor(max_workers=2) as fpp_pool, ThreadPoolExecutor(max_workers=2) as pixel_pool:
         for n, events in enumerate(pool.map(safe_star_events, stars, [given] * len(stars)), 1):
-            ok = [e for e in events if 'x' in e]
-            if ok:
-                raw, calibrated = score(models, checkpoint, np.stack([e['x'] for e in ok]))
-                for e, r, c in zip(ok, raw, calibrated):
-                    e['cnn_score'], e['cnn_calibrated'] = float(r), float(c)
-                    e['cnn_selected'] = bool(threshold is not None and r >= threshold)
-            pending, pixel_pending = {}, {}
-            for e in events:
-                if 'metrics' not in e or e['metrics']['verdict'] != 'pass':
-                    continue
-                if e['search'] in ('single', 'duo') or e['cnn_selected'] or given:
-                    pixel_pending[id(e)] = pixel_pool.submit(pixel_job, e)
-                    if not args.no_fpp:
-                        pending[id(e)] = fpp_pool.submit(fpp_job, e)
-            for e in events:
-                e.pop('x', None)
-                e['fpp'] = pending[id(e)].result() if id(e) in pending else None
-                if id(e) in pixel_pending:
-                    apply_pixel_test(e['metrics'], pixel_pending[id(e)].result())
-                if 'metrics' in e:
-                    fpp = e['fpp'] if e['fpp'] and 'error' not in e['fpp'] else None
-                    e['tier'] = (long_tier(e['search'], e['metrics'], fpp) if e['search'] in ('single', 'duo')
-                                 else tier(e['cnn_selected'], e['metrics'], fpp))
+            complete_events(events, models, checkpoint, given, args.no_fpp, fpp_pool, pixel_pool)
             tic = stars[n - 1]
             events = json_safe(events)
             save_json(REPORTS / f'{tic}.json', {'tic': tic, 'model_mtime': model_id, 'code_version': version,

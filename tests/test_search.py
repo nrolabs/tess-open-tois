@@ -156,6 +156,29 @@ class SearchTests(unittest.TestCase):
             finally:
                 data.EXOFOP_TOI = original
 
+    def test_code_version_tracks_only_result_code(self):
+        import shutil
+        import tempfile
+        import search
+        files = ('search.py', 'data.py') + search.SCIENCE_FILES
+        with tempfile.TemporaryDirectory() as folder:
+            for f in files:
+                shutil.copy(search.ROOT / f, Path(folder) / f)
+            original = search.ROOT
+            search.ROOT = Path(folder)
+            try:
+                base = search.code_version()
+                edit = lambda f, old, new: (Path(folder) / f).write_text((Path(folder) / f).read_text().replace(old, new, 1))
+                edit('search.py', '"""Orchestration only', '"""Orchestration (reworded) only')
+                edit('search.py', "    print(f'{len(stars)} stars to search', flush=True)",
+                     "    print(f'{len(stars)} stars queued', flush=True)")
+                edit('data.py', 'def open_tois():', 'def open_tois(): # comment')
+                self.assertEqual(search.code_version(), base)
+                edit('vetting.py', 'MIN_SNR = 7.1', 'MIN_SNR = 7.2')
+                self.assertNotEqual(search.code_version(), base)
+            finally:
+                search.ROOT = original
+
     def test_tier_rules(self):
         ok, bad = {'verdict': 'pass'}, {'verdict': 'fail'}
         self.assertTrue(tier(True, bad, None).startswith('rejected'))
