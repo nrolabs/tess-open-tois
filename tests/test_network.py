@@ -33,7 +33,7 @@ class NetworkTests(unittest.TestCase):
             inputs(X)
 
     def test_shape_and_gradient_are_finite(self):
-        # Este teste de contrato usa CPU; treino real exige CUDA.
+        # This contract test runs on CPU; real training requires CUDA.
         model = TransitCNN()
         X = torch.tensor(inputs(np.random.default_rng(8).normal(size=(3, INPUT_SIZE))))
         output = model(X)

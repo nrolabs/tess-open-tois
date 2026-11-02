@@ -1,6 +1,7 @@
 import unittest
 import numpy as np
-from tess import prepare, views, eligible, LABELS, VIEWS
+from data import eligible, LABELS
+from lightcurve import prepare, views, VIEWS
 from vetting import measure, analyze
 from search import bls, flatten, inject
 
@@ -31,11 +32,11 @@ class ScienceTests(unittest.TestCase):
         np.testing.assert_allclose(a, b, atol=1e-8)
         self.assertTrue(np.isfinite(a).all())
         self.assertEqual(len(a), sum(c * n for _, c, n in VIEWS))
-        self.assertLess(local_view(a)[30], -5)  # trânsito central preservado
+        self.assertLess(local_view(a)[30], -5)  # central transit preserved
 
     def test_missing_transit_is_not_a_negative_example(self):
         t = 2459000 + np.linspace(0, .2, 400)
-        with self.assertRaisesRegex(ValueError, 'cobertura'):
+        with self.assertRaisesRegex(ValueError, 'coverage'):
             prepare(t, np.ones(400), 3, 2459001., 2.4)
 
     def test_unknown_candidates_excluded(self):
@@ -87,7 +88,7 @@ class ScienceTests(unittest.TestCase):
     def test_centroid_shift_detected(self):
         t, flux = light_curve()
         phase = (t - 2459001. + 1.5) % 3 - 1.5
-        # Trânsito de 1% com centroide deslocado 0,02 px: fonte a ~2 px (42") do alvo.
+        # 1% transit with a 0.02 px centroid shift: source ~2 px (42") from the target.
         c1 = np.random.default_rng(1).normal(500, .001, len(t))
         c1[np.abs(phase) < .05] -= .02
         star = {'time_bjd': t, 'flux': flux, 'sector': np.ones(len(t), int), 'centr1': c1,

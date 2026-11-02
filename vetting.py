@@ -1,26 +1,30 @@
-"""Testes de falso positivo calculados localmente para um evento de período, época e duração dados."""
+"""Local false positive tests for an event with given period, epoch and duration."""
 import numpy as np
 from scipy import stats
 from scipy.optimize import least_squares
-from tess import prepare, views, trend, segments, wrap, SCALARS
+from lightcurve import prepare, views, trend, segments, wrap
 
 G = 6.674e-11
 DAY = 86400.
 REARTH_PER_RSUN = 109.1
 PIXEL_ARCSEC = 21.
-# Limiares: SNR de detecção do SPOC (TPS, 7,1σ).
+# Thresholds: SPOC detection SNR (TPS, 7.1σ).
 MIN_SNR = 7.1
 MIN_TRANSITS = 2
-# Reprovação: vários testes simultâneos e sistemáticas entre setores pedem margem acima de 3σ.
+# Rejection: several simultaneous tests and sector-to-sector systematics call for a margin above 3σ.
 ODD_EVEN_SIGMA = 4.
 CENTROID_SIGMA = 4.
 SECONDARY_SIGMA = 5.
 MAX_RADIUS_EARTH = 25.
 FAIL, WARN = 'fail', 'warn'
+# Metrics fed to the CNN alongside the views, in scalars() order.
+SCALARS = ('log_depth', 'snr', 'odd_even_sigma', 'secondary_sigma', 'ingress_fraction',
+           'log_duration_period', 'log_transits', 'centroid_sigma', 'crowding', 'log_star_radius',
+           'star_logg', 'star_teff', 'star_tmag', 'log_density_ratio')
 
 
 def window_noise(time, values, mask, width, cadence):
-    """Ruído de uma média sobre `width` dias, medido fora do trânsito (inclui ruído correlacionado)."""
+    """Noise of a mean over `width` days, measured out of transit (includes correlated noise)."""
     t, v = time[mask], values[mask]
     expected = width / cadence
     if len(t) < 10:
@@ -36,7 +40,7 @@ def window_noise(time, values, mask, width, cadence):
 
 
 def trapezoid(x, depth, total, ingress):
-    """Trânsito trapezoidal em unidades da duração do catálogo; ingress é fração de total."""
+    """Trapezoidal transit in units of the catalog duration; ingress is a fraction of total."""
     half, ramp = total / 2, max(ingress * total, 1e-6)
     return -depth * np.clip((half - np.abs(x)) / ramp, 0, 1)
 
@@ -54,7 +58,7 @@ def fit_shape(prep):
     if len(centers) < 20:
         return np.nan, np.nan
     centers, profile = np.array(centers), np.array(profile)
-    # Fluxo negativo (dado ruim) daria chute fora dos limites do ajuste.
+    # Negative flux (bad data) would put the initial guess outside the fit bounds.
     start = [min(max(-profile.min(), 1e-6), .99), 1., .2]
     fit = least_squares(lambda p: trapezoid(centers, *p) - profile, start,
                         bounds=([0, .3, .01], [1, 2.5, .5]))
@@ -62,10 +66,10 @@ def fit_shape(prep):
 
 
 def centroid_test(prep, centr1, centr2, depth, meta):
-    """Posição da fonte do trânsito pelo deslocamento do centroide, comparada à posição do alvo.
+    """Transit source position from the centroid shift, compared with the target position.
 
-    Centroide ponderado por fluxo: se a fonte em x_s escurece uma fração δ do fluxo da abertura,
-    Δc = δ (c_fora − x_s) / (1 − δ). Combina os setores por média ponderada em cada eixo.
+    Flux-weighted centroid: if the source at x_s dims a fraction δ of the aperture flux,
+    Δc = δ (c_out − x_s) / (1 − δ). Sectors are combined by a weighted mean on each axis.
     """
     core = np.abs(prep['phase']) < prep['duration'] / 4
     near = prep['outside'] & (np.abs(prep['phase']) < 3 * prep['duration'])
@@ -92,7 +96,7 @@ def centroid_test(prep, centr1, centr2, depth, meta):
             shift = np.mean(residual[inside]) - np.median(residual[reference])
             factor = (1 - aperture_depth) / aperture_depth
             source = np.median(values[reference]) - shift * factor
-            # Piso sistemático de 0,1 px: dispersão medida entre centroide e alvo em estrelas isoladas.
+            # 0.1 px systematic floor: scatter measured between centroid and target on isolated stars.
             error = np.hypot(noise * np.sqrt(expected / inside.sum()) * factor, .1)
             shifts.append((source - target, error))
         if len(shifts) == 2:
@@ -110,7 +114,7 @@ def centroid_test(prep, centr1, centr2, depth, meta):
 
 
 def stellar_density(star):
-    """Densidade média (kg/m³) a partir de log g e raio do TIC."""
+    """Mean density (kg/m³) from TIC log g and radius."""
     if star.get('logg') is None or star.get('radius') is None or not star['radius'] > 0:
         return np.nan
     gravity = 10 ** star['logg'] / 100
@@ -127,8 +131,8 @@ def measure(prep, star=None, centr1=None, centr2=None, crowding=np.nan, meta=Non
     odd = number % 2 == 1
 
     def depth(offset=0., select=True, half=duration / 4):
-        """Profundidade média; o erro é o maior entre o ruído fora do trânsito e a dispersão entre eventos,
-        que captura diferenças sistemáticas entre setores (diluição, variabilidade)."""
+        """Mean depth; the error is the larger of the out-of-transit noise and the event-to-event
+        scatter, which captures systematic differences between sectors (dilution, variability)."""
         chosen = valid & select & (np.abs(wrap(prep['phase'] - offset * period, period)) < half)
         if chosen.sum() == 0:
             return np.nan, np.nan, 0
@@ -138,7 +142,7 @@ def measure(prep, star=None, centr1=None, centr2=None, crowding=np.nan, meta=Non
         _, inverse, counts = np.unique(cycle, return_inverse=True, return_counts=True)
         full = counts >= max(3, points / 4)
         events = -np.bincount(inverse, corrected[chosen])[full] / counts[full]
-        # Dispersão robusta: um evento atípico (flare, falha) não deve dominar o erro.
+        # Robust scatter: one outlier event (flare, glitch) must not dominate the error.
         if len(events) >= 5:
             error = max(error, 1.4826 * np.median(np.abs(events - np.median(events))) / np.sqrt(len(events)))
         return float(-np.mean(corrected[chosen])), float(error), int(full.sum())
@@ -147,10 +151,10 @@ def measure(prep, star=None, centr1=None, centr2=None, crowding=np.nan, meta=Non
     box, box_err, _ = depth(half=.4 * duration)
     d_odd, e_odd, n_odd = depth(select=odd)
     d_even, e_even, n_even = depth(select=~odd)
-    # Com um único evento num grupo, diferença entre setores e diferença ímpar/par se confundem.
+    # With a single event in a group, sector differences and odd/even differences are degenerate.
     odd_even = abs(d_odd - d_even) / np.hypot(e_odd, e_even) if min(n_odd, n_even) >= 2 else np.nan
 
-    # Busca do secundário em todas as fases fora do primário (órbitas excêntricas incluídas).
+    # Secondary search at every phase outside the primary (eccentric orbits included).
     nbins = max(64, int(np.ceil(8 * period / duration)))
     cells = np.floor((prep['phase'] / period % 1) * nbins).astype(int) % nbins
     sums = np.bincount(cells[valid], corrected[valid], nbins)
@@ -170,7 +174,7 @@ def measure(prep, star=None, centr1=None, centr2=None, crowding=np.nan, meta=Non
         sec_depth, sec_err, _ = depth(offset=sec_phase)
         sec_sigma = float(max(sec_depth / sec_err, 0.)) if sec_err > 0 else 0.
         brightening = float(max(-sigmas[allowed].min(), 0.))
-        # Muitas fases testadas: limiar com 1% de falso alarme após correção de Bonferroni.
+        # Many phases tested: threshold at 1% false alarm after Bonferroni correction.
         sec_threshold = max(3., float(stats.norm.isf(.01 / max(1, allowed.sum() / width))))
 
     ingress, total = fit_shape(prep)
@@ -182,7 +186,7 @@ def measure(prep, star=None, centr1=None, centr2=None, crowding=np.nan, meta=Non
     else:
         a_over_r = albedo = np.nan
     t14 = total if np.isfinite(total) else duration
-    # Densidade máxima compatível com a duração observada (parâmetro de impacto zero, órbita circular).
+    # Maximum density compatible with the observed duration (zero impact parameter, circular orbit).
     max_density = 3 * np.pi * (period / (np.pi * t14) * (1 + k)) ** 3 / (G * (period * DAY) ** 2)
     density_ratio = max_density / density if np.isfinite(density) else np.nan
     radius = k * star['radius'] * REARTH_PER_RSUN if star.get('radius') else np.nan
@@ -236,7 +240,7 @@ def measure(prep, star=None, centr1=None, centr2=None, crowding=np.nan, meta=Non
 
 
 def scalars(m):
-    """Métricas em escala comparável para a CNN; valores ausentes viram referências solares/neutras."""
+    """Metrics on a comparable scale for the CNN; missing values become solar/neutral references."""
     star = m['star'] or {}
 
     def get(v, default):
@@ -261,10 +265,10 @@ def scalars(m):
 
 
 def refine(star, period, epoch, duration_hours, period_err, epoch_err, masks=()):
-    """Corrige a deriva da efeméride do catálogo entre setores distantes no tempo.
+    """Correct catalog ephemeris drift between sectors far apart in time.
 
-    Procura período e época dentro de 3σ das incertezas do catálogo (no máximo ±1 duração),
-    maximizando o SNR de uma caixa no trânsito.
+    Searches period and epoch within 3σ of the catalog uncertainties (at most ±1 duration),
+    maximizing the SNR of an in-transit box.
     """
     time, d = star['time_bjd'], duration_hours / 24
     cycles = np.round((time - epoch) / period)
@@ -292,18 +296,18 @@ def refine(star, period, epoch, duration_hours, period_err, epoch_err, masks=())
 
 
 def analyze(star, period, epoch, duration_hours, masks=(), errors=None):
-    """Vetor de entrada da CNN (vistas + escalares) e métricas de vetting de um evento.
+    """CNN input vector (views + scalars) and vetting metrics of one event.
 
-    errors=(erro do período, erro da época) do catálogo ativa o refinamento da efeméride.
+    errors=(period error, epoch error) from the catalog enables ephemeris refinement.
     """
     catalog = (period, epoch)
     if errors:
-        # Só setores em que a efeméride do catálogo localiza o trânsito (3σ ≤ 1 duração).
+        # Only sectors where the catalog ephemeris locates the transit (3σ ≤ 1 duration).
         cycles = np.round((star['time_bjd'] - epoch) / period)
         precise = 3 * np.hypot(errors[1], cycles * errors[0]) <= duration_hours / 24
         sectors = [s for s in np.unique(star['sector']) if precise[star['sector'] == s].all()]
         if not sectors:
-            raise ValueError('Efeméride do catálogo imprecisa demais para os setores disponíveis')
+            raise ValueError('Catalog ephemeris too imprecise for the available sectors')
         if len(sectors) < len(np.unique(star['sector'])):
             star = {k: (v[np.isin(star['sector'], sectors)] if hasattr(v, 'shape') else v) for k, v in star.items()}
         period, epoch = refine(star, period, epoch, duration_hours, *errors, masks)

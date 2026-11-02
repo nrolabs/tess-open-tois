@@ -9,14 +9,14 @@ TORCH_INDEX := https://download.pytorch.org/whl/cu128
 
 .PHONY: help setup catalog curves train candidates test
 help:
-	@echo 'make setup       Instalar ambientes (CNN + TRICERATOPS) e testar a GPU (PYTHON=/caminho/python3)'
-	@echo 'make catalog     Baixar catálogo TOI completo e registrar origem/hash'
-	@echo 'make curves      Baixar/retomar todas as curvas SPOC 120 s das estrelas rotuladas'
-	@echo '                 FIELD=N baixa N estrelas sem TOI com >=30 setores (todos) para buscar planetas novos'
-	@echo 'make train       Validação cruzada por estrela, ensemble final e injeção-recuperação na GPU'
-	@echo 'make candidates  Buscar sinais (BLS), classificar, testar falsos positivos e calcular FPP'
-	@echo '                 TIC=... uma estrela; FIELD=1 só as estrelas sem TOI; PERIOD= EPOCH= DURATION= avalia um evento'
-	@echo 'make test        Testes locais, sem rede'
+	@echo 'make setup       Install environments (CNN + TRICERATOPS) and test the GPU (PYTHON=/path/python3)'
+	@echo 'make catalog     Download the full TOI catalog and record source/hash'
+	@echo 'make curves      Download/resume all SPOC 120 s light curves of labeled stars'
+	@echo '                 FIELD=N downloads N non-TOI stars with >=30 sectors (all) to search for new planets'
+	@echo 'make train       Cross-validation by star, final ensemble and injection-recovery on the GPU'
+	@echo 'make candidates  Search signals (BLS), classify, run false positive tests and compute FPP'
+	@echo '                 TIC=... one star; FIELD=1 non-TOI stars only; PERIOD= EPOCH= DURATION= vets one event'
+	@echo 'make test        Local tests, no network'
 
 setup:
 	$(PYTHON) -m venv $(VENV)

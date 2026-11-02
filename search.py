@@ -1,4 +1,4 @@
-"""Busca cega de trânsitos (BLS), pipeline de candidatos e teste de injeção-recuperação."""
+"""Blind transit search (BLS), candidate pipeline and injection-recovery test."""
 import csv
 import json
 import multiprocessing
@@ -7,25 +7,25 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
-from tess import (ROOT, DATA, LABELS, load_star, select_sectors, downloaded_stars, star_tois, masks_for,
-                  trend, segments, wrap, save_json)
+from data import ROOT, DATA, load_star, select_sectors, downloaded_stars, star_tois, masks_for, save_json
+from lightcurve import prepare, trend, segments, wrap
 from vetting import analyze, stellar_density, G, DAY
 
 FPP_PYTHON = ROOT / '.venv-fpp' / 'bin' / 'python'
 REPORTS = ROOT / 'reports' / 'candidates'
-# Processos que usam CUDA (BLS) não podem nascer por fork de um processo que já abriu a GPU.
+# Processes using CUDA (BLS) cannot be forked from a process that already opened the GPU.
 SPAWN = multiprocessing.get_context('spawn')
 GPU_WORKERS = 4
 MIN_SDE = 7.
 MIN_BLS_SNR = 7.1
 MAX_SIGNALS = 3
 BIN_DAYS = 10 / 1440
-# Duração típica de trânsito central numa estrela solar, usada para espaçar a grade de períodos.
+# Typical central transit duration for a Sun-like star, used to space the period grid.
 SOLAR_DURATION = lambda period: .54 * (period / 365.25) ** (1 / 3)
 
 
 def flatten(time, flux, sector):
-    """Remove tendências sem conhecer o trânsito (mediana de ~1 dia) e corta flares."""
+    """Detrend without knowing the transit (~1 day median) and clip flares."""
     cadence = np.median(np.diff(time)[np.diff(time) > 0])
     base = trend(time, flux, np.isfinite(flux), segments(time, sector, cadence), int(1. / cadence) | 1)
     rel = flux / base - 1
@@ -42,10 +42,10 @@ def binned(time, rel):
 
 
 def period_grid(p_min, p_max, baseline, oversample=2):
-    """Passo em período para que a deriva de fase no baseline fique abaixo de 1/oversample da duração.
+    """Period steps keeping the phase drift over the baseline below 1/oversample of the duration.
 
-    Com dP/P = D(P)/(oversample·baseline), o número de passos até P é u(P) = ∫ oversample·baseline/D d(ln P);
-    a grade é u⁻¹ em inteiros (metade da duração solar cobre estrelas menores e trânsitos rasantes).
+    With dP/P = D(P)/(oversample·baseline), the number of steps up to P is u(P) = ∫ oversample·baseline/D d(ln P);
+    the grid is u⁻¹ at integers (half the solar duration covers smaller stars and grazing transits).
     """
     if p_max <= p_min:
         return np.zeros(0)
@@ -57,7 +57,7 @@ def period_grid(p_min, p_max, baseline, oversample=2):
 
 
 def spectrum_trend(power, block=501):
-    """Tendência do espectro: mediana por blocos interpolada (O(N), em vez de mediana móvel)."""
+    """Spectrum trend: interpolated block medians (O(N), instead of a running median)."""
     n = len(power) // block * block
     if n < 2 * block:
         return np.full(len(power), np.median(power))
@@ -67,9 +67,9 @@ def spectrum_trend(power, block=501):
 
 
 def fold(time, flux, p, nbins):
-    """Dobra em fase e somas acumuladas de contagem e fluxo por caixa de fase."""
+    """Phase fold and cumulative sums of counts and flux per phase bin."""
     import torch
-    # Multiplicar pelo inverso: divisão em float64 é lenta na GPU.
+    # Multiply by the reciprocal: float64 division is slow on the GPU.
     cells = ((time[None, :] * (1 / p)[:, None]) % 1 * nbins).long().clamp(max=nbins - 1)
     counts = torch.zeros(p.shape[0], nbins, dtype=time.dtype, device=time.device)
     counts.scatter_add_(1, cells, torch.ones_like(cells, dtype=time.dtype))
@@ -80,7 +80,7 @@ def fold(time, flux, p, nbins):
 
 
 def box_scan(c_n, c_y, p, durations, total_n, total_y, noise, nbins):
-    """Melhor janela de trânsito (SNR) por período, varrendo todas as fases e durações do lote."""
+    """Best transit window (SNR) per period, scanning every phase and duration of the batch."""
     import torch
     columns = torch.arange(nbins, device=c_n.device)
     best = torch.full_like(p, -float('inf'))
@@ -105,15 +105,15 @@ def box_scan(c_n, c_y, p, durations, total_n, total_y, noise, nbins):
 
 
 def bls_power(t, f, noise, periods, durations, oversample=3):
-    """BLS vetorizada em PyTorch (GPU quando disponível): SNR da profundidade por período.
+    """Vectorized BLS in PyTorch (GPU when available): depth SNR per period.
 
-    Para cada lote de períodos, dobra a curva em caixas de fase (scatter_add) e avalia todas as
-    janelas de trânsito por somas acumuladas. Retorna SNR, época central, duração e profundidade.
+    For each batch of periods, folds the light curve into phase bins (scatter_add) and evaluates every
+    transit window through cumulative sums. Returns SNR, mid-transit epoch, duration and depth.
     """
     import torch
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     origin = float(t[0])
-    # float64 sempre: precisão de fase não se degrada com baselines de vários anos.
+    # Always float64: phase precision does not degrade over multi-year baselines.
     real = torch.float64
     time = torch.as_tensor(t - origin, dtype=real, device=device)
     flux = torch.as_tensor(f, dtype=real, device=device)
@@ -122,7 +122,7 @@ def bls_power(t, f, noise, periods, durations, oversample=3):
     out = [np.empty(len(periods)) for _ in range(4)]
     for start in range(0, len(periods), batch):
         p = torch.as_tensor(periods[start:start + batch], dtype=real, device=device)
-        # Caixas de fase por lote (períodos crescentes): ~1/oversample da menor duração em cada período.
+        # Phase bins per batch (increasing periods): ~1/oversample of the shortest duration at each period.
         nbins = int(np.ceil(oversample * periods[start:start + batch].max() / durations.min()))
         c_n, c_y = fold(time, flux, p, nbins)
         best, best_t0, best_d, best_depth = box_scan(
@@ -130,15 +130,15 @@ def bls_power(t, f, noise, periods, durations, oversample=3):
             total_n, total_y, float(noise), nbins)
         for array, value in zip(out, (best, best_t0, best_d, best_depth)):
             array[start:start + len(p)] = value.cpu().numpy()
-    out[1] += origin  # em float64 no numpy: a época absoluta (~2,46e6 d) não cabe em float32
+    out[1] += origin  # in numpy float64: the absolute epoch (~2.46e6 d) does not fit in float32
     return out
 
 
 def bls(time, rel, p_min=.5, p_max=100., max_signals=MAX_SIGNALS):
-    """Sinais periódicos por BLS, mascarando cada um antes de procurar o próximo.
+    """Periodic signals by BLS, masking each one before searching for the next.
 
-    A potência é o SNR da profundidade (ruído robusto por caixa de 10 min), comparável entre
-    faixas de período; o SDE é medido dentro de cada faixa contra o próprio espectro.
+    Power is the depth SNR (robust noise per 10-min bin), comparable across period ranges;
+    the SDE is measured within each range against its own spectrum.
     """
     t, f = binned(time, rel)
     baseline = t[-1] - t[0]
@@ -152,7 +152,7 @@ def bls(time, rel, p_min=.5, p_max=100., max_signals=MAX_SIGNALS):
         noise = 1.4826 * np.median(np.abs(f[keep] - np.median(f[keep])))
         best = None
         edges = [e for e in (p_min, 1.5, 5, 15, p_max) if p_min <= e <= p_max]
-        # Faixas de período com durações compatíveis (BLS exige duração < período mínimo da faixa).
+        # Period ranges with compatible durations (BLS needs duration < shortest period of the range).
         for lo, hi in zip(edges[:-1], edges[1:]):
             durations = hours[hours / 24 < .15 * lo] / 24
             grid = period_grid(lo, hi, baseline)
@@ -161,7 +161,7 @@ def bls(time, rel, p_min=.5, p_max=100., max_signals=MAX_SIGNALS):
             snr, epochs, widths, depths = bls_power(t[keep], f[keep], noise, grid, durations)
             power = snr - spectrum_trend(snr)
             i = int(np.argmax(snr))
-            # SDE robusto: harmônicos de um sinal forte não inflam a escala do espectro.
+            # Robust SDE: harmonics of a strong signal do not inflate the spectrum scale.
             sde = (power[i] - np.median(power)) / (1.4826 * np.median(np.abs(power - np.median(power))))
             if best is None or snr[i] > best['snr']:
                 best = {'snr': float(snr[i]), 'sde': float(sde), 'period_days': float(grid[i]),
@@ -169,18 +169,18 @@ def bls(time, rel, p_min=.5, p_max=100., max_signals=MAX_SIGNALS):
                         'bls_depth_ppm': float(depths[i] * 1e6)}
         if best is None or best['snr'] < MIN_BLS_SNR or best['sde'] < MIN_SDE:
             break
-        # Resto de um sinal já achado (mesmo período ou harmônico): mascara sem registrar de novo.
-        repeated = any(abs(best['period_days'] / (f['period_days'] * r) - 1) < .01
-                       for f in found for r in (1, 2, .5, 3, 1 / 3))
+        # Leftover of a signal already found (same period or harmonic): mask without recording again.
+        repeated = any(abs(best['period_days'] / (prior['period_days'] * r) - 1) < .01
+                       for prior in found for r in (1, 2, .5, 3, 1 / 3))
         if not repeated:
             found.append(best)
-        # ±1,5 duração: a BLS tende a subestimar a duração e deixar ingresso/egresso para a próxima passada.
+        # ±1.5 durations: BLS tends to underestimate the duration and leave ingress/egress for the next pass.
         keep &= np.abs(wrap(t - best['epoch_bjd'], best['period_days'])) > 1.5 * best['duration_hours'] / 24
     return found
 
 
 def match_known(event, tois):
-    """Associa o sinal a um TOI do catálogo (mesmo período ou harmônico, mesma fase)."""
+    """Match the signal to a catalog TOI (same period or harmonic, same phase)."""
     for r in tois:
         p, e, d = float(r['pl_orbper']), float(r['pl_tranmid']), float(r['pl_trandurh']) / 24
         for ratio in (1, 2, .5, 3, 1 / 3):
@@ -192,7 +192,7 @@ def match_known(event, tois):
 
 
 def star_events(tic, given=None):
-    """Sinais de uma estrela (busca BLS ou evento informado) com features e testes de vetting."""
+    """Signals of one star (BLS search or a given event) with features and vetting tests."""
     star = load_star(tic)
     tois = star_tois(tic)
     if given:
@@ -201,7 +201,7 @@ def star_events(tic, given=None):
         events = bls(star['time_bjd'], flatten(star['time_bjd'], star['flux'], star['sector']))
     out = []
     for i, event in enumerate(events):
-        # Outros sinais da mesma estrela (catálogo e BLS) são mascarados ao medir este.
+        # Other signals of the same star (catalog and BLS) are masked while measuring this one.
         others = [(e['period_days'], e['epoch_bjd'], e['duration_hours']) for j, e in enumerate(events) if j != i]
         known = match_known(event, tois)
         masks = others + [m for r, m in zip(tois, masks_for(tois)) if not known or r['toi'] != known['toi']]
@@ -222,16 +222,15 @@ def safe_star_events(tic, given=None):
 
 
 def fpp_job(event):
-    """TRICERATOPS no ambiente isolado; dados dobrados em ±1,5 duração, em caixas de 5 minutos."""
+    """TRICERATOPS in the isolated environment; data folded within ±1.5 durations, in 5-minute bins."""
     if not FPP_PYTHON.exists():
-        return {'error': 'Ambiente .venv-fpp ausente; execute make setup'}
-    from tess import prepare
+        return {'error': '.venv-fpp environment missing; run make setup'}
     m = event['metrics']
     star = load_star(event['tic'])
     period, epoch, duration = m['period_days'], m['epoch_bjd'], m['duration_hours'] / 24
     prep = prepare(star['time_bjd'], star['flux'], period, epoch, m['duration_hours'], star['sector'],
                    event['masks'])
-    # Até 3 setores (os mais recentes) que de fato contêm trânsito: o TRICERATOPS baixa pixels de cada um.
+    # Up to 3 sectors (the most recent) that actually contain a transit: TRICERATOPS downloads pixels for each.
     sectors = sorted(set(prep['sector'][prep['valid'] & (np.abs(prep['phase']) < duration / 2)].astype(int)))[-3:]
     near = prep['valid'] & (np.abs(prep['phase']) < 1.5 * duration) & np.isin(prep['sector'], sectors)
     cells = np.floor(prep['phase'][near] / (5 / 1440)).astype(int)
@@ -248,32 +247,32 @@ def fpp_job(event):
     target = source.with_suffix('.out.json')
     source.write_text(json.dumps(job))
     try:
-        # cwd em data/fpp: o TRICERATOPS grava arquivos auxiliares (fundo Gaia) no diretório atual.
+        # cwd in data/fpp: TRICERATOPS writes helper files (Gaia background) to the current directory.
         result = subprocess.run([str(FPP_PYTHON), str(ROOT / 'fpp.py'), str(source), str(target)],
                                 capture_output=True, text=True, timeout=3600, cwd=work)
     except subprocess.TimeoutExpired:
-        return {'error': 'TRICERATOPS excedeu 1 hora'}
+        return {'error': 'TRICERATOPS exceeded 1 hour'}
     if result.returncode:
         return {'error': (result.stderr or result.stdout).strip()[-1000:]}
     return json.loads(target.read_text())
 
 
 def tier(cnn_selected, metrics, fpp):
-    """Classe final; 'forte' usa FPP < 1% e NFPP < 0,1% (versão mais rígida do critério de
-    validação estatística de Giacalone et al. 2021, que usa FPP < 1,5%)."""
+    """Final tier; 'strong' uses FPP < 1% and NFPP < 0.1% (stricter version of the statistical
+    validation criterion of Giacalone et al. 2021, which uses FPP < 1.5%)."""
     if metrics['verdict'] == 'fail':
-        return 'rejeitado: vetting'
+        return 'rejected: vetting'
     if fpp and fpp.get('nfpp') is not None and fpp['nfpp'] > .1:
-        return 'rejeitado: NFPP (provável estrela vizinha)'
+        return 'rejected: NFPP (likely nearby star)'
     if not cnn_selected:
-        return 'inconclusivo'
+        return 'inconclusive'
     if fpp and fpp.get('fpp') is not None:
         if fpp['fpp'] < .01 and fpp['nfpp'] < .001:
-            return 'forte: FPP < 1% e NFPP < 0,1%'
+            return 'strong: FPP < 1% and NFPP < 0.1%'
         if fpp['fpp'] < .5 and fpp['nfpp'] < .001:
-            return 'candidato: provável planeta'
-        return 'inconclusivo'
-    return 'candidato: sem FPP'
+            return 'candidate: likely planet'
+        return 'inconclusive'
+    return 'candidate: no FPP'
 
 
 def run_candidates(args):
@@ -293,7 +292,7 @@ def run_candidates(args):
         done = {int(p.stem) for p in REPORTS.glob('*.json')
                 if json.loads(p.read_text()).get('model_mtime') == model_id}
         stars = [t for t in stars if t not in done]
-    print(f'{len(stars)} estrelas para buscar', flush=True)
+    print(f'{len(stars)} stars to search', flush=True)
     with ProcessPoolExecutor(max_workers=args.workers, mp_context=SPAWN) as pool, \
             ThreadPoolExecutor(max_workers=2) as fpp_pool:
         for n, events in enumerate(pool.map(safe_star_events, stars, [given] * len(stars)), 1):
@@ -317,16 +316,16 @@ def run_candidates(args):
                                                 'events': events})
             for e in events:
                 if 'error' in e:
-                    print(f"[{n}/{len(stars)}] TIC {tic} erro: {e['error'][-200:]}", flush=True)
+                    print(f"[{n}/{len(stars)}] TIC {tic} error: {e['error'][-200:]}", flush=True)
                 if 'tier' in e:
                     print(f"[{n}/{len(stars)}] TIC {tic} P={e['period_days']:.4f} d "
-                          f"{'TOI ' + str(e['known']['toi']) if e['known'] else 'NOVO'} "
+                          f"{'TOI ' + str(e['known']['toi']) if e['known'] else 'not in TOI'} "
                           f"cnn={e['cnn_calibrated']:.3f} -> {e['tier']}", flush=True)
     summary()
 
 
 def summary():
-    """Tabela única com todos os sinais avaliados, os mais promissores primeiro."""
+    """Single table with every vetted signal, most promising first."""
     rows = []
     for path in REPORTS.glob('*.json'):
         for e in json.loads(path.read_text())['events']:
@@ -340,9 +339,10 @@ def summary():
                          'radius_earth': m['radius_earth'], 'snr': m['snr'], 'transits': m['transits'],
                          'cnn_calibrated': e['cnn_calibrated'], 'fpp': fpp.get('fpp'), 'nfpp': fpp.get('nfpp'),
                          'flags': ';'.join(f'{k}={v}' for k, v in m['flags'].items())})
-    order = ['forte', 'candidato', 'inconclusivo', 'rejeitado']
-    rows.sort(key=lambda r: (next(i for i, o in enumerate(order) if r['tier'].startswith(o)),
-                             r['known_toi'] is not None, -r['cnn_calibrated']))
+    order = ['strong', 'candidate', 'inconclusive', 'rejected']
+    # Unknown tiers (e.g. reports from older versions) sort last instead of failing.
+    rank = lambda tier: next((i for i, o in enumerate(order) if tier.startswith(o)), len(order))
+    rows.sort(key=lambda r: (rank(r['tier']), r['known_toi'] is not None, -r['cnn_calibrated']))
     if rows:
         with (ROOT / 'reports' / 'candidates.csv').open('w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=list(rows[0]))
@@ -350,13 +350,14 @@ def summary():
             writer.writerows(rows)
     counts = {}
     for r in rows:
-        key = (r['tier'].split(':')[0], 'conhecido' if r['known_toi'] else 'novo')
+        # "not in TOI" does not yet exclude SPOC TCEs or known eclipsing binaries (see README roadmap).
+        key = (r['tier'].split(':')[0], 'TOI' if r['known_toi'] else 'not in TOI')
         counts[key] = counts.get(key, 0) + 1
-    print('Resumo (reports/candidates.csv):', {f'{a} / {b}': c for (a, b), c in sorted(counts.items())})
+    print('Summary (reports/candidates.csv):', {f'{a} / {b}': c for (a, b), c in sorted(counts.items())})
 
 
 def inject(time, flux, period, epoch, depth, star, rng):
-    """Trânsito trapezoidal físico: duração pela densidade estelar e parâmetro de impacto aleatório."""
+    """Physical trapezoidal transit: duration from stellar density, random impact parameter."""
     density = stellar_density(star)
     if not np.isfinite(density):
         density = 1410.
@@ -370,8 +371,14 @@ def inject(time, flux, period, epoch, depth, star, rng):
 
 
 def planet_hosts():
-    """Estrelas cujos TOIs são todos CP/KP: sem binárias eclipsantes que a BLS acharia antes da injeção."""
-    return [t for t in downloaded_stars() if all(r['tfopwg_disp'] in ('CP', 'KP') for r in star_tois(t))]
+    """Stars whose TOIs are all CP/KP: no eclipsing binaries that BLS would find before the injection."""
+    hosts = []
+    for tic in downloaded_stars():
+        tois = star_tois(tic)
+        # all() of an empty list is true: non-TOI stars (FIELD sample) do not count as hosts.
+        if tois and all(r['tfopwg_disp'] in ('CP', 'KP') for r in tois):
+            hosts.append(tic)
+    return hosts
 
 
 def injection_trial(seed, hosts):
@@ -380,7 +387,7 @@ def injection_trial(seed, hosts):
     star = load_star(tic)
     sector = int(rng.choice(np.unique(star['sector'])))
     star = select_sectors(star, [sector])
-    # Remove os trânsitos conhecidos da estrela para injetar sobre uma curva sem sinal catalogado.
+    # Remove the star's known transits so the injection lands on a light curve with no cataloged signal.
     keep = np.ones(len(star['time_bjd']), bool)
     for p, e, d in masks_for(star_tois(tic)):
         keep &= np.abs(wrap(star['time_bjd'] - e, p)) > d / 24
@@ -402,16 +409,16 @@ def injection_trial(seed, hosts):
                 trial['x'], metrics = analyze(star, event['period_days'], event['epoch_bjd'], event['duration_hours'])
                 trial['vetting'] = metrics['verdict']
             except ValueError:
-                trial['vetting'] = 'sem cobertura'
+                trial['vetting'] = 'no coverage'
             break
     return trial
 
 
 def injection_recovery(models, threshold, n, workers=GPU_WORKERS):
-    """Fração de trânsitos sintéticos achados pela BLS, aprovados no vetting e selecionados pela CNN."""
+    """Fraction of synthetic transits found by BLS, passing vetting and selected by the CNN."""
     from neural import predict, inputs
     import torch
-    print(f'Injeção-recuperação: {n} trânsitos sintéticos', flush=True)
+    print(f'Injection-recovery: {n} synthetic transits', flush=True)
     with ProcessPoolExecutor(max_workers=workers, mp_context=SPAWN) as pool:
         hosts = planet_hosts()
         trials = [t for t in pool.map(injection_trial, range(n), [hosts] * n) if t]
@@ -441,5 +448,5 @@ def injection_recovery(models, threshold, n, workers=GPU_WORKERS):
             'selected': sum(t['selected'] for t in trials) / max(1, len(trials)),
             'by_depth_ppm': table('depth_ppm', [200, 500, 1000, 3000, 10000, 20001]),
             'by_period_days': table('period_days', [.5, 1, 3, 6, 13.01]),
-            'note': ('Um setor por injeção em estrelas com TOIs só CP/KP, trânsitos conhecidos removidos, '
-                     'sem escurecimento de borda.')}
+            'note': ('One sector per injection on stars whose TOIs are all CP/KP, known transits removed, '
+                     'no limb darkening.')}

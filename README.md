@@ -10,7 +10,8 @@ Pipeline completo sobre dados públicos do TESS:
    centroide e contaminação.
 5. **Probabilidade de falso positivo** (FPP/NFPP) com TRICERATOPS, usando estrelas vizinhas
    do TIC/Gaia e as aberturas SPOC.
-6. **Ranking** em `reports/candidates.csv`, separando sinais novos de TOIs já conhecidos.
+6. **Ranking** em `reports/candidates.csv`, separando sinais que correspondem a TOIs dos que estão
+   fora do TOI. "Fora do TOI" ainda não exclui TCEs do SPOC nem binárias eclipsantes conhecidas.
 
 O resultado final é um **candidato com evidência estatística**, não um planeta confirmado.
 Confirmação exige observações que um computador não substitui (imagem de alta resolução,
@@ -157,3 +158,21 @@ relatório de treino mede a recuperação do pipeline completo (BLS, vetting e C
 - A injeção-recuperação usa trânsitos trapezoidais sem escurecimento de borda, um setor por vez.
 - Sistemas com variação de tempo de trânsito (TTV) forte podem falhar nos testes de efeméride.
 - O projeto não envia nada automaticamente a ExoFOP, Zooniverse ou qualquer serviço.
+
+## Próximas etapas (anotado, não implementado)
+
+Proposta de evolução discutida em 2026-11-01. São prioridades, não melhorias já demonstradas.
+
+| Prioridade | Recurso | Benefício esperado | Observação |
+|---|---|---|---|
+| P0 | Imagens de diferença e análise de pixels | Identificar a verdadeira fonte do trânsito | Exige TPFs (~10× as curvas): baixar só para candidatos |
+| P0 | Treinamento com sinais de busca cega | Reduzir falsos positivos fora da população TOI | População: TCEs do SPOC ([bulk TCE](https://archive.stsci.edu/tess/bulk_downloads/bulk_downloads_tce.html)) + [catálogo de binárias eclipsantes TESS](https://cdsarc.cds.unistra.fr/ftp/J/ApJS/258/16) (Prša et al. 2022) |
+| P0 | Benchmark contra ExoMiner++ | Comparação mensurável | Scores publicados de 147.568 TCEs S1–67 ([Zenodo](https://zenodo.org/record/15466292), [artigo](https://arxiv.org/abs/2502.09790)); mesmos TCEs e rótulos; superioridade não é garantida |
+| P0 | Cruzar sinais com TCEs e binárias conhecidas | Rótulo "NOVO" confiável | Hoje "NOVO" só significa "não está no TOI" |
+| P1 | TLS + BLS + busca de trânsitos únicos | Sinais que a BLS perde | Trânsito único: planetas de período longo |
+| P1 | Dados FFI e curvas de 20 s | Mais estrelas e sinais | Volume muito maior; limitado por banda e disco |
+| P1 | Modelo temporal com atenção | Dependências entre eventos e setores | Avaliar contra o CNN atual no benchmark |
+| P1 | Tratamento de TTV | Planetas não estritamente periódicos | |
+| P1 | Modelo de ruído correlacionado | Sensibilidade a sinais fracos | |
+| P2 | Ensemble heterogêneo | Combinar erros distintos | |
+| P2 | Incerteza e detecção fora de distribuição | Evitar confiança excessiva | |

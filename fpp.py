@@ -1,4 +1,4 @@
-"""Probabilidade de falso positivo com TRICERATOPS; roda no ambiente isolado .venv-fpp."""
+"""False positive probability with TRICERATOPS; runs in the isolated .venv-fpp environment."""
 import json
 import sys
 import time
@@ -16,19 +16,24 @@ def main(source, target):
     import triceratops.triceratops as tr
     job = json.loads(open(source).read())
     sectors = np.array(job['sectors'])
-    log(f"consultando TIC/Gaia ao redor do TIC {job['tic']}, setores {list(sectors)}")
+    log(f"querying TIC/Gaia and downloading TESScut cutouts for TIC {job['tic']}, sectors {list(sectors)}")
     star = tr.target(ID=job['tic'], sectors=sectors)
-    log(f'{len(star.stars)} estrelas no campo; buscando aberturas SPOC')
+    # TRICERATOPS silently skips sectors whose TESScut download fails, leaving fewer pixel
+    # coordinate sets than sectors; calc_depths would then fail with an opaque IndexError.
+    if len(star.pix_coords) < len(sectors):
+        raise SystemExit(f'TESScut cutout failed for {len(sectors) - len(star.pix_coords)} of '
+                         f'{len(sectors)} sectors (network); rerun later')
+    log(f'{len(star.stars)} stars in the field; fetching SPOC apertures')
     apertures = star.get_spoc_apertures()
     keep = [i for i, a in enumerate(apertures) if a is not None]
     if not keep:
-        raise SystemExit('Sem aperturas SPOC para os setores')
+        raise SystemExit('No SPOC apertures for the sectors')
     if len(keep) < len(sectors):
         star = tr.target(ID=job['tic'], sectors=sectors[keep])
         apertures = [apertures[i] for i in keep]
-    log('calculando profundidades exigidas de cada estrela')
+    log('computing the depth each star would need')
     star.calc_depths(tdepth=job['depth'], all_ap_pixels=apertures)
-    # O resultado é Monte Carlo: várias execuções dão média e dispersão.
+    # The result is Monte Carlo: several runs give mean and spread.
     runs = []
     for run in range(job.get('runs', 3)):
         log(f'Monte Carlo {run + 1}')
@@ -42,7 +47,7 @@ def main(source, target):
               'sectors_used': [int(s) for s in sectors[keep]],
               'top_scenarios': [{'id': str(r['ID']), 'scenario': r['scenario'], 'prob': float(r['prob'])}
                                 for _, r in probs.iterrows()]}
-    log('fim')
+    log('done')
     with open(target, 'w') as f:
         json.dump(result, f, indent=2)
 
