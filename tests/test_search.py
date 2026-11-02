@@ -136,6 +136,11 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(match_known(dict(event, epoch_bjd=2459017.), [tce])['phase_checked'], False)
         self.assertIsNone(match_known(dict(event, epoch_bjd=2459017.), [dict(tce, period_err=1e-5)]))
 
+    def test_json_safe_reports(self):
+        from search import json_safe
+        value = json_safe({'a': float('nan'), 'b': [np.inf, np.float64(2.)], 'c': np.int64(3), 'd': np.bool_(True)})
+        self.assertEqual(value, {'a': None, 'b': [None, 2.], 'c': 3, 'd': True})
+
     def test_tier_rules(self):
         ok, bad = {'verdict': 'pass'}, {'verdict': 'fail'}
         self.assertTrue(tier(True, bad, None).startswith('rejected'))

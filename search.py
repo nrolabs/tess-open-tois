@@ -464,6 +464,22 @@ def long_tier(kind, metrics, fpp):
     return f'{label} [{kind}]'
 
 
+def json_safe(value):
+    """Report values with every non-finite number as None: several metrics are legitimately undefined
+    (no stellar density, no data on one side of an event), and JSON has no NaN."""
+    if isinstance(value, dict):
+        return {k: json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(v) for v in value]
+    if isinstance(value, (float, np.floating)):
+        return float(value) if np.isfinite(value) else None
+    if isinstance(value, np.integer):
+        return int(value)
+    if isinstance(value, np.bool_):
+        return bool(value)
+    return value
+
+
 def code_version():
     """Hash of the search and vetting code: reports from other versions are recomputed."""
     import hashlib
@@ -525,6 +541,7 @@ def run_candidates(args):
                     e['tier'] = (long_tier(e['search'], e['metrics'], fpp) if e['search'] in ('single', 'duo')
                                  else tier(e['cnn_selected'], e['metrics'], fpp))
             tic = stars[n - 1]
+            events = json_safe(events)
             save_json(REPORTS / f'{tic}.json', {'tic': tic, 'model_mtime': model_id, 'code_version': version,
                                                 'threshold': threshold, 'events': events})
             for e in events:
