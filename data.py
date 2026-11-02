@@ -1,7 +1,8 @@
-"""Public TESS data: TOI catalog, MAST sector manifests, light curve download and loading."""
+"""Public TESS data: TOI and known-signal catalogs, MAST sector manifests, light curve download and loading."""
 import csv
 import functools
 import hashlib
+import io
 import json
 import re
 import subprocess
@@ -11,6 +12,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / 'data'
 CAT = DATA / 'catalogs' / 'toi.json'
+# Signals outside the TOI catalog: community TOIs (ExoFOP CTOIs) and published planets (Exoplanet Archive).
+KNOWN = DATA / 'catalogs' / 'known.json'
+TAP = 'https://exoplanetarchive.ipac.caltech.edu/TAP/sync'
+CTOI_URL = 'https://exofop.ipac.caltech.edu/tess/download_ctoi.php?sort=ctoi&output=csv'
+PLANETS_QUERY = ('select pl_name, tic_id, pl_orbper, pl_tranmid, pl_trandur, tran_flag '
+                 'from pscomppars where tic_id is not null')
 LABELS = {'CP': 1, 'KP': 1, 'FP': 0, 'FA': 0}
 MANIFEST = 'https://archive.stsci.edu/missions/tess/download_scripts/sector/tesscurl_sector_{}_lc.sh'
 PRODUCT = re.compile(r'https://\S+/(tess\d+-s(\d{4})-(\d{16})-\d{4}-s_lc\.fits)$')
@@ -31,23 +38,57 @@ def rows():
     return json.loads(CAT.read_text())
 
 
+def fetch_text(url, query=None):
+    command = ['curl', '--fail', '--silent', '--show-error', '--retry', '2', '--retry-all-errors',
+               '--connect-timeout', '15', '--max-time', '300', url]
+    if query:
+        command[-1:] = ['-G', url, '--data-urlencode', f'query={query}', '--data-urlencode', 'format=json']
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError(f'Download failed ({url}): {result.stderr.strip()}')
+    return result.stdout
+
+
+def positive(value):
+    """Float if the value is a finite positive number, else None (catalog fields are often empty)."""
+    import math
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) and value > 0 else None
+
+
+def known_catalog():
+    """CTOIs and published planets in one format; period, epoch or duration may be None."""
+    ctois = list(csv.DictReader(io.StringIO(fetch_text(CTOI_URL))))
+    planets = json.loads(fetch_text(TAP, PLANETS_QUERY))
+    if not ctois or 'CTOI' not in ctois[0] or not planets or 'tic_id' not in planets[0]:
+        raise ValueError('Unexpected CTOI or planet catalog response')
+    known = [{'source': 'CTOI', 'name': f"CTOI {r['CTOI']}", 'tic': int(r['TIC ID']),
+              'period': positive(r['Period (days)']), 'epoch': positive(r['Transit Epoch (BJD)']),
+              'duration_hours': positive(r['Duration (hrs)']),
+              'disposition': r['TFOPWG Disposition'] or r['User Disposition'] or None, 'transiting': True}
+             for r in ctois]
+    known += [{'source': 'planet', 'name': r['pl_name'], 'tic': int(r['tic_id'].split()[-1]),
+               'period': positive(r['pl_orbper']), 'epoch': positive(r['pl_tranmid']),
+               'duration_hours': positive(r['pl_trandur']), 'disposition': 'published',
+               'transiting': bool(r['tran_flag'])}
+              for r in planets]
+    return known
+
+
 def catalog(args):
     from collections import Counter
     if not args.local:
-        result = subprocess.run([
-            'curl', '--fail', '--silent', '--show-error', '--retry', '2', '--retry-all-errors',
-            '--connect-timeout', '15', '--max-time', '180', '-G',
-            'https://exoplanetarchive.ipac.caltech.edu/TAP/sync',
-            '--data-urlencode', 'query=select * from toi',
-            '--data-urlencode', 'format=json',
-        ], capture_output=True, text=True)
-        if result.returncode:
-            raise RuntimeError(f'TAP query failed: {result.stderr.strip()}')
-        records = json.loads(result.stdout)
+        records = json.loads(fetch_text(TAP, 'select * from toi'))
         if not isinstance(records, list) or not records or 'tid' not in records[0]:
             raise ValueError('Unexpected catalog response')
         save_json(CAT, records)
+        save_json(KNOWN, known_catalog())
         rows.cache_clear()
+        known_signals_all.cache_clear()
+        known_by_star.cache_clear()
     records = rows()
     digest = hashlib.sha256(CAT.read_bytes()).hexdigest()
     snapshot_dir = DATA / 'catalogs' / 'snapshots'
@@ -64,6 +105,9 @@ def catalog(args):
         'sha256': hashlib.sha256(CAT.read_bytes()).hexdigest(),
         'objects': len(records), 'stars': len({r['tid'] for r in records}),
         'dispositions': dict(Counter(r['tfopwg_disp'] for r in records)),
+        'known_signals': {'sources': [CTOI_URL, f'{TAP} ({PLANETS_QUERY})'],
+                          'sha256': hashlib.sha256(KNOWN.read_bytes()).hexdigest() if KNOWN.exists() else None,
+                          'counts': dict(Counter(k['source'] for k in known_signals_all())) if KNOWN.exists() else None},
     }
     save_json(DATA / 'catalogs' / 'snapshot.json', summary)
     print(json.dumps(summary, indent=2))
@@ -272,6 +316,31 @@ def select_sectors(star, sectors):
 
 def star_tois(tic):
     return [r for r in rows() if int(r['tid']) == int(tic) and eligible(r)]
+
+
+@functools.lru_cache(maxsize=1)
+def known_signals_all():
+    if not KNOWN.exists():
+        raise FileNotFoundError(f'{KNOWN} missing; run make catalog')
+    return json.loads(KNOWN.read_text())
+
+
+@functools.lru_cache(maxsize=1)
+def known_by_star():
+    from collections import defaultdict
+    index = defaultdict(list)
+    for k in known_signals_all():
+        index[k['tic']].append(k)
+    return index
+
+
+def known_signals(tic):
+    """Every catalogued signal of the star: TOIs, CTOIs and published planets, in one format."""
+    tois = [{'source': 'TOI', 'name': f"TOI {r['toi']}", 'toi': r['toi'], 'tic': int(tic),
+             'period': float(r['pl_orbper']), 'epoch': float(r['pl_tranmid']),
+             'duration_hours': float(r['pl_trandurh']), 'disposition': r['tfopwg_disp'], 'transiting': True}
+            for r in star_tois(tic)]
+    return tois + known_by_star().get(int(tic), [])
 
 
 def masks_for(tois, exclude=None):

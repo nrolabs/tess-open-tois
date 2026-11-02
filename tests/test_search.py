@@ -4,7 +4,7 @@ import torch
 from data import aws_url, field_stars, masks_for, FIELD_SECTORS
 from lightcurve import wrap
 from neural import AveragePool
-from search import (bls, flatten, inject, period_grid, match_known, tier, consistent, edge_dominated,
+from search import (bls, flatten, inject, period_grid, match_known, known_masks, tier, consistent, edge_dominated,
                     SOLAR_DURATION)
 from vetting import refine, analyze
 
@@ -106,9 +106,26 @@ class SearchTests(unittest.TestCase):
         self.assertLess(hours, 14)
 
     def test_match_known_harmonic(self):
-        toi = [{'toi': 1.01, 'tfopwg_disp': 'CP', 'pl_orbper': 3., 'pl_tranmid': 2459001., 'pl_trandurh': 2.4}]
-        self.assertEqual(match_known({'period_days': 6., 'epoch_bjd': 2459004., 'duration_hours': 2.4}, toi)['period_ratio'], 2)
+        toi = [{'source': 'TOI', 'name': 'TOI 1.01', 'toi': 1.01, 'disposition': 'CP', 'period': 3.,
+                'epoch': 2459001., 'duration_hours': 2.4, 'transiting': True}]
+        match = match_known({'period_days': 6., 'epoch_bjd': 2459004., 'duration_hours': 2.4}, toi)
+        self.assertEqual((match['period_ratio'], match['toi']), (2, 1.01))
         self.assertIsNone(match_known({'period_days': 4.1, 'epoch_bjd': 2459001., 'duration_hours': 2.4}, toi))
+        # Same period, other phase: a second planet in resonance is not the catalogued one.
+        self.assertIsNone(match_known({'period_days': 3., 'epoch_bjd': 2459002.5, 'duration_hours': 2.4}, toi))
+
+    def test_match_known_ctoi_and_planets(self):
+        event = {'period_days': 20., 'epoch_bjd': 2459010., 'duration_hours': 4.}
+        single = {'source': 'CTOI', 'name': 'CTOI 5.01', 'disposition': 'PC', 'period': None,
+                  'epoch': 2459070.05, 'duration_hours': None, 'transiting': True}
+        self.assertEqual(match_known(event, [single])['name'], 'CTOI 5.01')
+        self.assertIsNone(match_known(event, [dict(single, epoch=2459075.)]))
+        rv = {'source': 'planet', 'name': 'HD 1 b', 'disposition': 'published', 'period': 10.02,
+              'epoch': 2450000., 'duration_hours': None, 'transiting': False}
+        match = match_known(event, [rv])
+        self.assertEqual((match['period_ratio'], match['phase_checked']), (2, False))
+        self.assertEqual(known_masks([single, rv, dict(rv, name='b', transiting=True, duration_hours=3.)]),
+                         [(10.02, 2450000., 3.)])
 
     def test_tier_rules(self):
         ok, bad = {'verdict': 'pass'}, {'verdict': 'fail'}

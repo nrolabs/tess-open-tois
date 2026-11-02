@@ -10,7 +10,7 @@ TORCH_INDEX := https://download.pytorch.org/whl/cu128
 .PHONY: help setup catalog curves train candidates test
 help:
 	@echo 'make setup       Install environments (CNN + TRICERATOPS) and test the GPU (PYTHON=/path/python3)'
-	@echo 'make catalog     Download the full TOI catalog and record source/hash'
+	@echo 'make catalog     Download TOIs, CTOIs and published planets; record source/hash'
 	@echo 'make curves      Download/resume all SPOC 120 s light curves of labeled stars'
 	@echo '                 FIELD=N downloads N non-TOI stars with >=30 sectors (all) to search for new planets'
 	@echo 'make train       Cross-validation by star, final ensemble and injection-recovery on the GPU'

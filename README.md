@@ -9,8 +9,10 @@ End-to-end pipeline on public TESS data:
    physical size, stellar density, transit source location from the centroid, and contamination.
 5. **False positive probability** (FPP/NFPP) with TRICERATOPS, using TIC/Gaia neighbors and the
    SPOC apertures.
-6. **Ranking** in `reports/candidates.csv`, separating signals that match a TOI from those not in
-   the TOI catalog. "Not in TOI" does not yet exclude SPOC TCEs or known eclipsing binaries.
+6. **Ranking** in `reports/candidates.csv`, separating catalogued signals from new ones. A signal is
+   "catalogued" when it matches a TOI, a community TOI (ExoFOP CTOI) or a published planet (NASA
+   Exoplanet Archive), by period or harmonic and phase; single-transit CTOIs match by event time and
+   non-transiting planets by period. SPOC TCEs and known eclipsing binaries are not checked yet.
 
 The final result is a **candidate with statistical evidence**, not a confirmed planet. Confirmation
 needs observations a computer cannot replace (high-resolution imaging, spectroscopy, radial
@@ -34,7 +36,7 @@ make candidates
 | Command | What it does |
 |---|---|
 | `make setup` | Creates `.venv` (CNN, PyTorch CUDA) and `.venv-fpp` (TRICERATOPS) and tests the GPU |
-| `make catalog` | Downloads the full TOI catalog and records source/hash |
+| `make catalog` | Downloads the TOI catalog, CTOIs and published planets, and records source/hash |
 | `make curves` | Downloads/resumes every SPOC 120 s light curve of CP/KP/FP/FA stars |
 | `make curves FIELD=100` | Downloads 100 **non-TOI** stars with ≥30 sectors (fixed sample, all sectors) to search for new planets |
 | `make train` | Cross-validation by star, final ensemble, calibration and injection-recovery |
@@ -205,6 +207,7 @@ CNN).
 | Path | Content |
 |---|---|
 | `data/catalogs/toi.json`, `.csv`, `snapshot.json`, `snapshots/` | Catalog, source, hash and versions |
+| `data/catalogs/known.json` | CTOIs and published planets used to tell catalogued signals from new ones |
 | `data/manifests/sector-N.sh` | Official per-sector manifests (cache) |
 | `data/mast/lc/*.fits` | Original FITS files, kept |
 | `data/curves/<TIC>/sector-N.npz` | BJD TDB time, PDCSAP flux, error and MOM_CENTR centroids |
@@ -241,7 +244,7 @@ Evolution proposal discussed on 2026-11-01. These are priorities, not demonstrat
 | P0 | Difference images and pixel analysis | Identify the true transit source | Needs TPFs (~10× the light curves): download only for candidates |
 | P0 | Training on blind-search signals | Fewer false positives outside the TOI population | Population: SPOC TCEs ([TCE bulk](https://archive.stsci.edu/tess/bulk_downloads/bulk_downloads_tce.html)) + [TESS eclipsing binary catalog](https://cdsarc.cds.unistra.fr/ftp/J/ApJS/258/16) (Prša et al. 2022) |
 | P0 | Benchmark against ExoMiner++ | Measurable comparison | Published scores for 147,568 TCEs S1–67 ([Zenodo](https://zenodo.org/record/15466292), [paper](https://arxiv.org/abs/2502.09790)); same TCEs and labels; superiority is not guaranteed |
-| P0 | Cross-match signals with TCEs and known binaries | Reliable "new" label | Today "not in TOI" only means not in the TOI catalog |
+| P0 | Cross-match signals with TCEs and known binaries | Reliable "new" label | TOIs, CTOIs and published planets are already checked; the binary catalog (VizieR) was unreachable when the cross-match was added |
 | P1 | TLS + BLS + single-transit search | Signals BLS misses | Single transits: long-period planets |
 | P1 | FFI data and 20 s light curves | More stars and signals | Much larger volume; limited by bandwidth and disk |
 | P1 | Temporal model with attention | Dependencies across events and sectors | Evaluate against the current CNN in the benchmark |

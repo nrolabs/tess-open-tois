@@ -6,7 +6,8 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
-from data import ROOT, DATA, load_star, select_sectors, downloaded_stars, star_tois, masks_for, save_json
+from data import (ROOT, DATA, load_star, select_sectors, downloaded_stars, star_tois, known_signals,
+                  save_json)
 from lightcurve import prepare, trend, segments, wrap, SPAWN, GPU_WORKERS
 from vetting import analyze, stellar_density, G, DAY
 
@@ -278,22 +279,44 @@ def bls(time, rel, p_min=.5, p_max=100., max_signals=MAX_SIGNALS):
     return found
 
 
-def match_known(event, tois):
-    """Match the signal to a catalog TOI (same period or harmonic, same phase)."""
-    for r in tois:
-        p, e, d = float(r['pl_orbper']), float(r['pl_tranmid']), float(r['pl_trandurh']) / 24
-        for ratio in (1, 2, .5, 3, 1 / 3):
-            if abs(event['period_days'] / (p * ratio) - 1) < .01:
-                lag = abs(wrap(event['epoch_bjd'] - e, min(p, p * ratio)))
-                if lag < max(d, event['duration_hours'] / 24):
-                    return {'toi': r['toi'], 'disposition': r['tfopwg_disp'], 'period_ratio': ratio}
+def match_known(event, known):
+    """Match the signal to a catalogued one (TOI, CTOI or published planet): same period or a harmonic,
+    and the same phase when the catalog has an epoch. Single-transit CTOIs (epoch, no period) match when
+    one of our transits falls on their event; non-transiting planets match by period alone."""
+    duration = event['duration_hours'] / 24
+    for k in known:
+        p, e = k['period'], k['epoch']
+        d = max((k['duration_hours'] or 0) / 24, duration)
+        found = None
+        if p is None and e is not None:
+            if abs(wrap(e - event['epoch_bjd'], event['period_days'])) < d:
+                found = {'period_ratio': None, 'phase_checked': True}
+        elif p is not None:
+            for ratio in (1, 2, .5, 3, 1 / 3):
+                if abs(event['period_days'] / (p * ratio) - 1) < .01:
+                    if e is None or not k['transiting']:
+                        found = {'period_ratio': ratio, 'phase_checked': False}
+                    elif abs(wrap(event['epoch_bjd'] - e, min(p, p * ratio))) < d:
+                        found = {'period_ratio': ratio, 'phase_checked': True}
+                    if found:
+                        break
+        if found:
+            return {'source': k['source'], 'name': k['name'], 'toi': k.get('toi'),
+                    'disposition': k['disposition'], **found}
     return None
+
+
+def known_masks(known, exclude=None):
+    """(period, epoch, duration) of every catalogued transiting signal with a full ephemeris."""
+    return [(k['period'], k['epoch'], k['duration_hours']) for k in known
+            if k['transiting'] and None not in (k['period'], k['epoch'], k['duration_hours'])
+            and (exclude is None or k['name'] != exclude['name'])]
 
 
 def star_events(tic, given=None):
     """Signals of one star (BLS search or a given event) with features and vetting tests."""
     star = load_star(tic)
-    tois = star_tois(tic)
+    known_here = known_signals(tic)
     if given:
         events = [given]
     else:
@@ -302,8 +325,8 @@ def star_events(tic, given=None):
     for i, event in enumerate(events):
         # Other signals of the same star (catalog and BLS) are masked while measuring this one.
         others = [(e['period_days'], e['epoch_bjd'], e['duration_hours']) for j, e in enumerate(events) if j != i]
-        known = match_known(event, tois)
-        masks = others + [m for r, m in zip(tois, masks_for(tois)) if not known or r['toi'] != known['toi']]
+        known = match_known(event, known_here)
+        masks = others + known_masks(known_here, known)
         try:
             x, metrics = analyze(star, event['period_days'], event['epoch_bjd'], event['duration_hours'], masks)
         except ValueError as exc:
@@ -418,7 +441,7 @@ def run_candidates(args):
                     print(f"[{n}/{len(stars)}] TIC {tic} error: {e['error'][-200:]}", flush=True)
                 if 'tier' in e:
                     print(f"[{n}/{len(stars)}] TIC {tic} P={e['period_days']:.4f} d "
-                          f"{'TOI ' + str(e['known']['toi']) if e['known'] else 'not in TOI'} "
+                          f"{e['known']['name'] if e['known'] else 'not catalogued'} "
                           f"cnn={e['cnn_calibrated']:.3f} -> {e['tier']}", flush=True)
     summary()
 
@@ -431,8 +454,11 @@ def summary():
             if 'tier' not in e:
                 continue
             m, fpp = e['metrics'], e.get('fpp') or {}
-            rows.append({'tic': e['tic'], 'tier': e['tier'], 'known_toi': (e['known'] or {}).get('toi'),
-                         'known_disposition': (e['known'] or {}).get('disposition'),
+            known = e['known'] or {}
+            # Reports from before the CTOI cross-match only carry a TOI number.
+            name = known.get('name') or (f"TOI {known['toi']}" if known.get('toi') else None)
+            rows.append({'tic': e['tic'], 'tier': e['tier'], 'known': name, 'known_source': known.get('source'),
+                         'known_disposition': known.get('disposition'),
                          'period_days': m['period_days'], 'epoch_bjd': m['epoch_bjd'],
                          'duration_hours': m['duration_hours'], 'depth_ppm': m['depth_ppm'],
                          'radius_earth': m['radius_earth'], 'snr': m['snr'], 'transits': m['transits'],
@@ -441,7 +467,7 @@ def summary():
     order = ['strong', 'candidate', 'inconclusive', 'rejected']
     # Unknown tiers (e.g. reports from older versions) sort last instead of failing.
     rank = lambda tier: next((i for i, o in enumerate(order) if tier.startswith(o)), len(order))
-    rows.sort(key=lambda r: (rank(r['tier']), r['known_toi'] is not None, -r['cnn_calibrated']))
+    rows.sort(key=lambda r: (rank(r['tier']), r['known'] is not None, -r['cnn_calibrated']))
     if rows:
         with (ROOT / 'reports' / 'candidates.csv').open('w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=list(rows[0]))
@@ -449,8 +475,9 @@ def summary():
             writer.writerows(rows)
     counts = {}
     for r in rows:
-        # "not in TOI" does not yet exclude SPOC TCEs or known eclipsing binaries (see README roadmap).
-        key = (r['tier'].split(':')[0], 'TOI' if r['known_toi'] else 'not in TOI')
+        # "not catalogued" checks TOIs, CTOIs and published planets; SPOC TCEs and known eclipsing
+        # binaries are not checked yet (see README roadmap).
+        key = (r['tier'].split(':')[0], 'catalogued' if r['known'] else 'not catalogued')
         counts[key] = counts.get(key, 0) + 1
     print('Summary (reports/candidates.csv):', {f'{a} / {b}': c for (a, b), c in sorted(counts.items())})
 
@@ -488,7 +515,7 @@ def injection_trial(seed, hosts):
     star = select_sectors(star, [sector])
     # Remove the star's known transits so the injection lands on a light curve with no cataloged signal.
     keep = np.ones(len(star['time_bjd']), bool)
-    for p, e, d in masks_for(star_tois(tic)):
+    for p, e, d in known_masks(known_signals(tic)):
         keep &= np.abs(wrap(star['time_bjd'] - e, p)) > d / 24
     star = {k: (v[keep] if hasattr(v, 'shape') else v) for k, v in star.items()}
     if len(star['time_bjd']) < 1000:
