@@ -142,8 +142,17 @@ are left to the CNN and the NFPP.
 Even `strong` is statistical validation **without** high-resolution imaging: without a contrast
 curve, TRICERATOPS cannot rule out very close companions. Treat it as a follow-up priority.
 
-TRICERATOPS downloads a TESScut image cutout per sector; with a slow or busy connection this can
-take tens of minutes per candidate, and a failed cutout is reported as an FPP error.
+TRICERATOPS normally downloads a full TESScut cube per sector (thousands of frames) only to place
+the neighbors on the pixel grid, and version 1.1.0 reads corner keywords (`1CRV4P`/`2CRV4P`) that
+current TESScut files no longer have, so every sector failed. `fpp.py` instead takes the WCS, CCD
+corner and SPOC aperture from the APERTURE extension of our local light curve files: no image
+download, and the relative geometry matches TESScut to 0.001 px. Only the TIC/Gaia neighbor query
+and the TRILEGAL background query still use the network.
+
+Check on a confirmed planet (TOI-1194.01, 3 sectors, catalog ephemeris): vetting passed (SNR 217),
+CNN 0.956, NFPP ~4e-24, FPP 0.054 ± 0.021 (91% transiting planet; most of the rest is "planet on a
+bound companion"). Tier: `candidate: likely planet`. FPP < 1% for a real planet usually needs a
+high-resolution imaging contrast curve, which rules out close companions.
 
 ## Transit search (`search.py`)
 

@@ -126,6 +126,10 @@ class SearchTests(unittest.TestCase):
         self.assertEqual((match['period_ratio'], match['phase_checked']), (2, False))
         self.assertEqual(known_masks([single, rv, dict(rv, name='b', transiting=True, duration_hours=3.)]),
                          [(10.02, 2450000., 3.)])
+        # The same planet listed twice (e.g. TOI and TCE): neither entry may mask the event itself.
+        twin = dict(rv, name='TCE', transiting=True, duration_hours=4., period=20., epoch=2459010.)
+        other = dict(twin, name='c', period=7.3)
+        self.assertEqual(known_masks([twin, dict(twin, name='TOI'), other], event), [(7.3, 2459010., 4.)])
         # A stale ephemeris (drift beyond a quarter period) still matches, by period alone.
         tce = {'source': 'TCE', 'name': 'TCE s0001-s0001 1-01', 'disposition': None, 'period': 20.,
                'epoch': 2458330., 'period_err': .05, 'epoch_err': .001, 'duration_hours': 4., 'transiting': True}

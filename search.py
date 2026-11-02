@@ -310,11 +310,14 @@ def match_known(event, known):
     return None
 
 
-def known_masks(known, exclude=None):
-    """(period, epoch, duration) of every catalogued transiting signal with a full ephemeris."""
+def known_masks(known, event=None):
+    """(period, epoch, duration) of every catalogued transiting signal with a full ephemeris.
+
+    With an event, every entry matching it is left out: the same planet is often listed several times
+    (TOI, published planet, TCEs of several DV runs), and masking any of them would erase the event."""
     return [(k['period'], k['epoch'], k['duration_hours']) for k in known
             if k['transiting'] and None not in (k['period'], k['epoch'], k['duration_hours'])
-            and (exclude is None or k['name'] != exclude['name'])]
+            and (event is None or match_known(event, [k]) is None)]
 
 
 def star_events(tic, given=None):
@@ -330,7 +333,7 @@ def star_events(tic, given=None):
         # Other signals of the same star (catalog and BLS) are masked while measuring this one.
         others = [(e['period_days'], e['epoch_bjd'], e['duration_hours']) for j, e in enumerate(events) if j != i]
         known = match_known(event, known_here)
-        masks = others + known_masks(known_here, known)
+        masks = others + known_masks(known_here, event)
         try:
             x, metrics = analyze(star, event['period_days'], event['epoch_bjd'], event['duration_hours'], masks)
         except ValueError as exc:
@@ -366,7 +369,9 @@ def fpp_job(event):
     outside = np.abs(phase) > duration / 2
     job = {'tic': int(event['tic']), 'sectors': [int(s) for s in sectors], 'period': period,
            'depth': max(m['depth_ppm'] or 0, 1) / 1e6, 'time': phase.tolist(), 'flux': flux.tolist(),
-           'flux_err': float(np.std(flux[outside])) if outside.sum() > 5 else float(prep['scatter'])}
+           'flux_err': float(np.std(flux[outside])) if outside.sum() > 5 else float(prep['scatter']),
+           # Local SPOC files: TRICERATOPS reads pixel geometry and apertures from them instead of the network.
+           'fits': {str(s): str(ROOT / star['meta'][s]['fits']) for s in sectors}}
     work = DATA / 'fpp'
     work.mkdir(parents=True, exist_ok=True)
     source = work / f"{event['tic']}-{period:.6f}.json"
