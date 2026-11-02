@@ -126,6 +126,11 @@ class SearchTests(unittest.TestCase):
         self.assertEqual((match['period_ratio'], match['phase_checked']), (2, False))
         self.assertEqual(known_masks([single, rv, dict(rv, name='b', transiting=True, duration_hours=3.)]),
                          [(10.02, 2450000., 3.)])
+        # A stale ephemeris (drift beyond a quarter period) still matches, by period alone.
+        tce = {'source': 'TCE', 'name': 'TCE s0001-s0001 1-01', 'disposition': None, 'period': 20.,
+               'epoch': 2458330., 'period_err': .05, 'epoch_err': .001, 'duration_hours': 4., 'transiting': True}
+        self.assertEqual(match_known(dict(event, epoch_bjd=2459017.), [tce])['phase_checked'], False)
+        self.assertIsNone(match_known(dict(event, epoch_bjd=2459017.), [dict(tce, period_err=1e-5)]))
 
     def test_tier_rules(self):
         ok, bad = {'verdict': 'pass'}, {'verdict': 'fail'}

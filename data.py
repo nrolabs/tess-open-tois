@@ -12,11 +12,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / 'data'
 CAT = DATA / 'catalogs' / 'toi.json'
-# Signals outside the TOI catalog: community TOIs (ExoFOP CTOIs) and published planets (Exoplanet Archive).
+# Signals outside the TOI catalog: community TOIs (ExoFOP CTOIs), published planets (Exoplanet Archive),
+# SPOC TCEs (every DV run, single- and multi-sector) and the TESS eclipsing binary catalog (Prša et al. 2022).
 KNOWN = DATA / 'catalogs' / 'known.json'
+TCE_INDEX = 'https://archive.stsci.edu/tess/bulk_downloads/bulk_downloads_tce.html'
+TCE_FILE = re.compile(r'/missions/tess/catalogs/tce/[^"]+_dvr-tcestats\.csv')
+EB_URL = 'https://archive.stsci.edu/hlsps/tess-ebs/hlsp_tess-ebs_tess_lcf-ffi_s0001-s0026_tess_v1.0_cat.csv'
 TAP = 'https://exoplanetarchive.ipac.caltech.edu/TAP/sync'
 CTOI_URL = 'https://exofop.ipac.caltech.edu/tess/download_ctoi.php?sort=ctoi&output=csv'
-PLANETS_QUERY = ('select pl_name, tic_id, pl_orbper, pl_tranmid, pl_trandur, tran_flag '
+PLANETS_QUERY = ('select pl_name, tic_id, pl_orbper, pl_orbpererr1, pl_tranmid, pl_tranmiderr1, pl_trandur, tran_flag '
                  'from pscomppars where tic_id is not null')
 LABELS = {'CP': 1, 'KP': 1, 'FP': 0, 'FA': 0}
 MANIFEST = 'https://archive.stsci.edu/missions/tess/download_scripts/sector/tesscurl_sector_{}_lc.sh'
@@ -60,22 +64,75 @@ def positive(value):
 
 
 def known_catalog():
-    """CTOIs and published planets in one format; period, epoch or duration may be None."""
+    """CTOIs, published planets, eclipsing binaries and SPOC TCEs in one format.
+
+    Period, epoch or duration may be None."""
     ctois = list(csv.DictReader(io.StringIO(fetch_text(CTOI_URL))))
     planets = json.loads(fetch_text(TAP, PLANETS_QUERY))
     if not ctois or 'CTOI' not in ctois[0] or not planets or 'tic_id' not in planets[0]:
         raise ValueError('Unexpected CTOI or planet catalog response')
     known = [{'source': 'CTOI', 'name': f"CTOI {r['CTOI']}", 'tic': int(r['TIC ID']),
               'period': positive(r['Period (days)']), 'epoch': positive(r['Transit Epoch (BJD)']),
+              'period_err': positive(r['Period (days) Error']), 'epoch_err': positive(r['Transit Epoch (BJD) err']),
               'duration_hours': positive(r['Duration (hrs)']),
               'disposition': r['TFOPWG Disposition'] or r['User Disposition'] or None, 'transiting': True}
              for r in ctois]
     known += [{'source': 'planet', 'name': r['pl_name'], 'tic': int(r['tic_id'].split()[-1]),
                'period': positive(r['pl_orbper']), 'epoch': positive(r['pl_tranmid']),
+               'period_err': positive(r['pl_orbpererr1']), 'epoch_err': positive(r['pl_tranmiderr1']),
                'duration_hours': positive(r['pl_trandur']), 'disposition': 'published',
                'transiting': bool(r['tran_flag'])}
               for r in planets]
+    known += [{'source': 'EB', 'name': f"EB TIC {r['tess_id']}", 'tic': int(r['tess_id']),
+               'period': positive(r['period']),
+               'epoch': positive(r['bjd0']) and positive(r['bjd0']) + 2457000, 'duration_hours': None,
+               'disposition': 'eclipsing binary',
+               # Matched by period only: the detected signal may be the primary or the secondary eclipse.
+               'transiting': False}
+              for r in csv.DictReader(io.StringIO(fetch_text(EB_URL)))]
+    known += spoc_tces()
     return known
+
+
+def resume_download(url, output, attempts=6):
+    """Large file over a slow link: resume partial transfers and abort only when the transfer stalls."""
+    part = output.with_suffix(output.suffix + '.part')
+    for _ in range(attempts):
+        result = subprocess.run(['curl', '--fail', '--silent', '--show-error', '--location', '--continue-at', '-',
+                                 '--connect-timeout', '15', '--speed-limit', '1000', '--speed-time', '120',
+                                 '--output', str(part), url], capture_output=True, text=True)
+        if result.returncode == 0:
+            part.replace(output)
+            return
+    raise RuntimeError(f'Download failed {url}: {result.stderr.strip()}')
+
+
+def spoc_tces():
+    """Every SPOC TCE (all single- and multi-sector DV runs listed on the MAST bulk page).
+
+    Each DV run file has a timestamped name and never changes, so it is kept in data/catalogs/tce/."""
+    from concurrent.futures import ThreadPoolExecutor
+    files = sorted(set(TCE_FILE.findall(fetch_text(TCE_INDEX))))
+    if not files:
+        raise ValueError('No TCE files found on the MAST bulk download page')
+    folder = DATA / 'catalogs' / 'tce'
+    folder.mkdir(parents=True, exist_ok=True)
+
+    def read(path):
+        run = re.search(r'-(s\d{4}-s\d{4})_', path).group(1)
+        local = folder / Path(path).name
+        if not local.exists():
+            resume_download('https://archive.stsci.edu' + path, local)
+        with local.open() as f:
+            return [{'source': 'TCE', 'name': f"TCE {run} {r['tceid'].lstrip('0')}", 'tic': int(r['ticid']),
+                     'period': positive(r['tce_period']), 'epoch': positive(r['tce_time0']),
+                     'period_err': positive(r['tce_period_err']), 'epoch_err': positive(r['tce_time0_err']),
+                     'duration_hours': positive(r['tce_duration']), 'disposition': None, 'transiting': True}
+                    for r in csv.DictReader(line for line in f if not line.startswith('#'))]
+    with ThreadPoolExecutor(8) as pool:
+        tces = [t for part in pool.map(read, files) for t in part]
+    print(f'{len(tces)} TCEs from {len(files)} DV runs', flush=True)
+    return tces
 
 
 def catalog(args):
@@ -105,7 +162,7 @@ def catalog(args):
         'sha256': hashlib.sha256(CAT.read_bytes()).hexdigest(),
         'objects': len(records), 'stars': len({r['tid'] for r in records}),
         'dispositions': dict(Counter(r['tfopwg_disp'] for r in records)),
-        'known_signals': {'sources': [CTOI_URL, f'{TAP} ({PLANETS_QUERY})'],
+        'known_signals': {'sources': [CTOI_URL, f'{TAP} ({PLANETS_QUERY})', EB_URL, TCE_INDEX],
                           'sha256': hashlib.sha256(KNOWN.read_bytes()).hexdigest() if KNOWN.exists() else None,
                           'counts': dict(Counter(k['source'] for k in known_signals_all())) if KNOWN.exists() else None},
     }
@@ -335,9 +392,10 @@ def known_by_star():
 
 
 def known_signals(tic):
-    """Every catalogued signal of the star: TOIs, CTOIs and published planets, in one format."""
+    """Every catalogued signal of the star (TOIs, CTOIs, planets, eclipsing binaries, TCEs), in one format."""
     tois = [{'source': 'TOI', 'name': f"TOI {r['toi']}", 'toi': r['toi'], 'tic': int(tic),
              'period': float(r['pl_orbper']), 'epoch': float(r['pl_tranmid']),
+             'period_err': positive(r.get('pl_orbpererr1')), 'epoch_err': positive(r.get('pl_tranmiderr1')),
              'duration_hours': float(r['pl_trandurh']), 'disposition': r['tfopwg_disp'], 'transiting': True}
             for r in star_tois(tic)]
     return tois + known_by_star().get(int(tic), [])

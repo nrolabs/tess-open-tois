@@ -280,23 +280,27 @@ def bls(time, rel, p_min=.5, p_max=100., max_signals=MAX_SIGNALS):
 
 
 def match_known(event, known):
-    """Match the signal to a catalogued one (TOI, CTOI or published planet): same period or a harmonic,
-    and the same phase when the catalog has an epoch. Single-transit CTOIs (epoch, no period) match when
-    one of our transits falls on their event; non-transiting planets match by period alone."""
+    """Match the signal to a catalogued one (TOI, CTOI, planet, TCE or eclipsing binary): same period or a
+    harmonic, and the same phase when the catalog ephemeris is still good at our epoch. The phase tolerance
+    grows with the ephemeris drift (3σ of period and epoch, propagated); once that reaches a quarter of the
+    period the phase is unknown and the period alone decides. Single-transit CTOIs (epoch, no period) match
+    when one of our transits falls on their event; non-transiting planets and binaries match by period."""
     duration = event['duration_hours'] / 24
     for k in known:
         p, e = k['period'], k['epoch']
         d = max((k['duration_hours'] or 0) / 24, duration)
         found = None
         if p is None and e is not None:
-            if abs(wrap(e - event['epoch_bjd'], event['period_days'])) < d:
+            if abs(wrap(e - event['epoch_bjd'], event['period_days'])) < d + 3 * (k.get('epoch_err') or 0):
                 found = {'period_ratio': None, 'phase_checked': True}
         elif p is not None:
             for ratio in (1, 2, .5, 3, 1 / 3):
                 if abs(event['period_days'] / (p * ratio) - 1) < .01:
-                    if e is None or not k['transiting']:
+                    cycles = abs(event['epoch_bjd'] - e) / p if e is not None else 0
+                    drift = 3 * np.hypot(cycles * (k.get('period_err') or 0), k.get('epoch_err') or 0)
+                    if e is None or not k['transiting'] or drift > min(p, p * ratio) / 4:
                         found = {'period_ratio': ratio, 'phase_checked': False}
-                    elif abs(wrap(event['epoch_bjd'] - e, min(p, p * ratio))) < d:
+                    elif abs(wrap(event['epoch_bjd'] - e, min(p, p * ratio))) < d + drift:
                         found = {'period_ratio': ratio, 'phase_checked': True}
                     if found:
                         break
@@ -475,8 +479,7 @@ def summary():
             writer.writerows(rows)
     counts = {}
     for r in rows:
-        # "not catalogued" checks TOIs, CTOIs and published planets; SPOC TCEs and known eclipsing
-        # binaries are not checked yet (see README roadmap).
+        # "not catalogued": no match among TOIs, CTOIs, published planets, SPOC TCEs or known binaries.
         key = (r['tier'].split(':')[0], 'catalogued' if r['known'] else 'not catalogued')
         counts[key] = counts.get(key, 0) + 1
     print('Summary (reports/candidates.csv):', {f'{a} / {b}': c for (a, b), c in sorted(counts.items())})
