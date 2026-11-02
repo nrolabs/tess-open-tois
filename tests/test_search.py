@@ -74,8 +74,14 @@ class SearchTests(unittest.TestCase):
 
     def test_edge_veto(self):
         t = np.r_[np.arange(0, 13, 10 / 1440), np.arange(14, 27, 10 / 1440)]
-        self.assertTrue(edge_dominated(t, 13.95, 12.95, .2))  # events at 12.95 (gap) and 26.9 (end of data)
-        self.assertFalse(edge_dominated(t, 5., 3., .2))
+        f = np.random.default_rng(8).normal(0, .001, len(t))
+        dips = lambda period, epoch: np.where(np.abs(wrap(t - epoch, period)) < .1, -.005, 0.)
+        # Both events at edges (12.95 next to the gap, 26.9 at the end of data): vetoed.
+        self.assertTrue(edge_dominated(t, f + dips(13.95, 12.95), .001, 13.95, 12.95, .2))
+        # No event near an edge: kept.
+        self.assertFalse(edge_dominated(t, f + dips(5., 3.), .001, 5., 3., .2))
+        # A real planet with one of its events at the gap: the other events carry it, kept.
+        self.assertFalse(edge_dominated(t, f + dips(4.95, 3.05), .001, 4.95, 3.05, .2))
 
     def test_refine_recovers_drifted_ephemeris(self):
         star = star_with_transit(period=3., epoch=2459001.)

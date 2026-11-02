@@ -22,7 +22,8 @@ MIN_BLS_SNR = 7.1
 # Consistency veto: without its strongest event, a real signal keeps about SNR·sqrt((N-1)/N).
 MIN_EVENT_CONSISTENCY = .5
 # Edge veto: scattered-light ramps and filter edge effects near data gaps were the main source of false
-# alarms (inverted light curve test: 59% -> 16% of single-sector curves, with ~1% recovery loss).
+# alarms. Events sitting at a segment edge are dropped and the rest must still carry the signal (same rule
+# as the consistency veto): a real planet can have one event near a gap, a pair of edge ramps cannot.
 EDGE_DAYS = .5
 MAX_EDGE_FRACTION = .5
 MAX_SIGNALS = 3
@@ -129,15 +130,47 @@ def consistent(t, f, noise, period, epoch, duration):
     return bool(total > 0 and rest >= MIN_EVENT_CONSISTENCY * expected)
 
 
-def edge_dominated(t, period, epoch, duration):
-    """True when most in-transit points lie within EDGE_DAYS of a data gap (segment edge)."""
+def edge_dominated(t, f, noise, period, epoch, duration):
+    """True when the signal does not survive dropping the events that sit at segment edges."""
     gaps = np.where(np.diff(t) > .5)[0]
     edges = np.r_[t[0], t[gaps], t[gaps + 1], t[-1]]
     inside = np.abs(wrap(t - epoch, period)) < duration / 2
     if not inside.any():
         return True
     near = np.min(np.abs(edges[None, :] - t[inside][:, None]), axis=1) < EDGE_DAYS
-    return bool(near.mean() > MAX_EDGE_FRACTION)
+    _, event = np.unique(np.round((t[inside] - epoch) / period), return_inverse=True)
+    counts = np.bincount(event)
+    at_edge = (np.bincount(event, near) / counts > MAX_EDGE_FRACTION)[event]
+    if not at_edge.any():
+        return False
+    if at_edge.all():
+        return True
+    total = -f[inside].sum() / (noise * np.sqrt(inside.sum()))
+    rest = -f[inside][~at_edge].sum() / (noise * np.sqrt((~at_edge).sum()))
+    expected = total * np.sqrt((~at_edge).sum() / inside.sum())
+    return bool(not (total > 0 and rest >= MIN_EVENT_CONSISTENCY * expected))
+
+
+def fold_snr(t, f, noise, period, epoch, duration):
+    """Box SNR of a given ephemeris (in-transit mean against zero), with the per-duration noise."""
+    inside = np.abs(wrap(t - epoch, period)) < duration / 2
+    if inside.sum() < 3:
+        return -np.inf
+    return float(-f[inside].sum() / (noise * np.sqrt(inside.sum())))
+
+
+def resolve_alias(t, f, noise, signal):
+    """Prefer P/2 or P/3 when folding there is stronger and consistent (DV-style period alias check)."""
+    period, epoch, duration = signal['period_days'], signal['epoch_bjd'], signal['duration_hours'] / 24
+    best_snr = fold_snr(t, f, noise, period, epoch, duration)
+    for k in (2, 3):
+        candidate = period / k
+        if candidate < .5 or duration >= candidate / 2:
+            continue
+        snr = fold_snr(t, f, noise, candidate, epoch, duration)
+        if snr > best_snr and consistent(t, f, noise, candidate, epoch, duration):
+            best_snr, signal = snr, {**signal, 'period_days': candidate, 'alias_of': period}
+    return signal
 
 
 def box_scan(c_n, c_y, p, durations, total_n, total_y, noises, nbins):
@@ -235,13 +268,14 @@ def bls(time, rel, p_min=.5, p_max=100., max_signals=MAX_SIGNALS):
                         'bls_depth_ppm': float(depths[i] * 1e6)}
         if best is None or best['snr'] < MIN_BLS_SNR:
             break
+        noise = best.pop('noise')
+        best = resolve_alias(t[keep], f[keep], noise, best)
         # Leftover of a signal already found (same period or harmonic): mask without recording again.
         repeated = any(abs(best['period_days'] / (prior['period_days'] * r) - 1) < .01
                        for prior in found for r in (1, 2, .5, 3, 1 / 3))
-        noise = best.pop('noise')
         shape = (best['period_days'], best['epoch_bjd'], best['duration_hours'] / 24)
         if (not repeated and consistent(t[keep], f[keep], noise, *shape)
-                and not edge_dominated(t[keep], *shape)):
+                and not edge_dominated(t[keep], f[keep], noise, *shape)):
             found.append(best)
         # ±1.5 durations: BLS tends to underestimate the duration and leave ingress/egress for the next pass.
         keep &= np.abs(wrap(t - best['epoch_bjd'], best['period_days'])) > 1.5 * best['duration_hours'] / 24

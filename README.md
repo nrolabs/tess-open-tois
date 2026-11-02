@@ -152,8 +152,11 @@ following the SPOC TPS:
   quarter of its shortest period, so short-period, long-duration transits are not found at 2P.
 - **Consistency veto.** A detection that does not survive removing its strongest event (it should
   keep about SNR·√((N−1)/N)) rests on a single event and is rejected.
-- **Edge veto.** A detection whose in-transit points mostly lie within 0.5 d of a data gap is
-  rejected; scattered-light ramps and filter edges were the main source of false alarms.
+- **Edge veto.** Events whose in-transit points mostly lie within 0.5 d of a data gap are dropped
+  and the rest must still carry the signal (same rule as the consistency veto); scattered-light ramps
+  and filter edges were the main source of false alarms.
+- **Period alias check** (as in the SPOC DV): P/2 and P/3 are preferred when folding there is
+  stronger and consistent.
 - Up to 3 signals per star, masking ±1.5 durations after each one; harmonics of a signal already
   found are not reported again.
 
@@ -177,13 +180,18 @@ frozen tuning set (paired comparison of 0.5, 0.75, 1.0 and 1.5 d at matched fals
 single-sector injections into planet-host stars never used for tuning, each pipeline taking its single
 best peak, evaluated once, at the same false-alarm rate on inverted light curves:
 
-| Method | Recovery at 1% FA | 5% FA | 10% FA | SNR 7–10 | SNR 10–15 | SNR 15–25 | SNR > 25 |
-|---|---|---|---|---|---|---|---|
-| This pipeline (biweight + GPU BLS) | 81% | 85% | 87% | 0% | 69% | 91% | 92% |
-| wotan + TLS (SDE statistic) | 81% | 83% | 85% | 20% | 50% | 91% | 90% |
+| Held-out set | Method | Recovery at 1% FA | 5% FA | 10% FA | SNR 7–10 | SNR 10–15 | SNR 15–25 | SNR > 25 |
+|---|---|---|---|---|---|---|---|---|
+| 1st (earlier version, global edge veto) | This pipeline | 81% | 85% | 87% | 0% | 69% | 91% | 92% |
+| 1st | wotan + TLS (SDE) | 81% | 83% | 85% | 20% | 50% | 91% | 90% |
+| 2nd (current version, new injections) | This pipeline | 74% | 79% | 84% | 17% | 64% | 76% | 93% |
+| 2nd | wotan + TLS (SDE) | 69% | 77% | 77% | 50% | 60% | 70% | 87% |
 
-The two are at the same level; with 182 detectable cases, differences of a few points are within the
-statistical uncertainty. TLS does better on the weakest signals (SNR 7–10), this pipeline on SNR 10–15.
+On the second held-out set (197 detectable cases) the difference is +3.5, +2.7 and +5.9 points at
+1%, 5% and 10% FA, with bootstrap 95% intervals of −6.3 to +16.0, −3.4 to +8.5 and −0.5 to +11.9:
+consistently ahead on both independent sets, but not yet statistically established. TLS remains
+better on the weakest signals (SNR 7–10). Rejected after testing on the tuning set: finer period,
+phase and duration grids (more trials raise the noise peaks as much as they raise the signal).
 A limb-darkened matched filter (the TLS idea) was evaluated and not adopted: for small planets its
 theoretical SNR gain over the optimal box is only ~1%.
 
