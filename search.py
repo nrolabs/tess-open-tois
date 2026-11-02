@@ -16,10 +16,20 @@ REPORTS = ROOT / 'reports' / 'candidates'
 # Processes using CUDA (BLS) cannot be forked from a process that already opened the GPU.
 SPAWN = multiprocessing.get_context('spawn')
 GPU_WORKERS = 4
-MIN_SDE = 7.
+# Detection is gated on red-noise-aware SNR, like the SPOC TPS (MES >= 7.1); the SDE is only reported,
+# because it is unstable for signals with few transits. Vetting does the false positive triage.
 MIN_BLS_SNR = 7.1
+# Consistency veto: without its strongest event, a real signal keeps about SNR·sqrt((N-1)/N).
+MIN_EVENT_CONSISTENCY = .5
+# Edge veto: scattered-light ramps and filter edge effects near data gaps were the main source of false
+# alarms (inverted light curve test: 59% -> 16% of single-sector curves, with ~1% recovery loss).
+EDGE_DAYS = .5
+MAX_EDGE_FRACTION = .5
 MAX_SIGNALS = 3
 BIN_DAYS = 10 / 1440
+DURATION_HOURS = np.array([.5, .75, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 13, 16, 20])
+# Narrow period ranges, so each range can test durations up to a quarter of its shortest period.
+PERIOD_EDGES = (.5, .8, 1.2, 1.8, 2.7, 4, 6, 9, 13.5, 20, 30, 45, 70, 100)
 # Typical central transit duration for a Sun-like star, used to space the period grid.
 SOLAR_DURATION = lambda period: .54 * (period / 365.25) ** (1 / 3)
 
@@ -79,14 +89,63 @@ def fold(time, flux, p, nbins):
     return torch.cat([zero, counts, counts], 1).cumsum(1), torch.cat([zero, sums, sums], 1).cumsum(1)
 
 
-def box_scan(c_n, c_y, p, durations, total_n, total_y, noise, nbins):
+def duration_noise(t, f, durations):
+    """Noise of the in-transit mean for each duration, in per-bin units (correlated noise included).
+
+    The standard deviation of the mean over windows of length d, times sqrt(bins per window), equals the
+    per-bin white noise when the noise is white and grows when it is correlated (as in the TPS CDPP).
+    """
+    white = 1.4826 * np.median(np.abs(f - np.median(f)))
+    out = []
+    for d in durations:
+        per_window = d / BIN_DAYS
+        _, inverse, counts = np.unique(np.floor((t - t[0]) / d), return_inverse=True, return_counts=True)
+        means = np.bincount(inverse, f) / counts
+        full = counts >= per_window / 2
+        if full.sum() < 10:
+            out.append(white)
+            continue
+        red = 1.4826 * np.median(np.abs(means[full] - np.median(means[full]))) * np.sqrt(per_window)
+        out.append(max(white, red))
+    return np.array(out)
+
+
+def consistent(t, f, noise, period, epoch, duration):
+    """True when the detection does not rest on a single event (TPS-style consistency veto)."""
+    inside = np.abs(wrap(t - epoch, period)) < duration / 2
+    if inside.sum() < 3:
+        return False
+    _, inverse, counts = np.unique(np.round((t[inside] - epoch) / period), return_inverse=True, return_counts=True)
+    if len(counts) < 2:
+        return False
+    sums = -np.bincount(inverse, f[inside])
+    # Combined SNR of the in-transit mean is sum(depth)/(noise*sqrt(n)); drop the strongest event.
+    total = sums.sum() / (noise * np.sqrt(counts.sum()))
+    strongest = int(np.argmax(sums / np.sqrt(counts)))
+    rest = (sums.sum() - sums[strongest]) / (noise * np.sqrt(counts.sum() - counts[strongest]))
+    expected = total * np.sqrt((counts.sum() - counts[strongest]) / counts.sum())
+    return bool(total > 0 and rest >= MIN_EVENT_CONSISTENCY * expected)
+
+
+def edge_dominated(t, period, epoch, duration):
+    """True when most in-transit points lie within EDGE_DAYS of a data gap (segment edge)."""
+    gaps = np.where(np.diff(t) > .5)[0]
+    edges = np.r_[t[0], t[gaps], t[gaps + 1], t[-1]]
+    inside = np.abs(wrap(t - epoch, period)) < duration / 2
+    if not inside.any():
+        return True
+    near = np.min(np.abs(edges[None, :] - t[inside][:, None]), axis=1) < EDGE_DAYS
+    return bool(near.mean() > MAX_EDGE_FRACTION)
+
+
+def box_scan(c_n, c_y, p, durations, total_n, total_y, noises, nbins):
     """Best transit window (SNR) per period, scanning every phase and duration of the batch."""
     import torch
     columns = torch.arange(nbins, device=c_n.device)
     best = torch.full_like(p, -float('inf'))
     best_t0, best_d, best_depth = torch.zeros_like(p), torch.zeros_like(p), torch.zeros_like(p)
     for i in range(durations.shape[0]):
-        d = durations[i]
+        d, noise = durations[i], noises[i]
         k = (d / p * nbins).round().clamp(min=1).long()
         end = columns[None, :] + k[:, None]
         n_in = c_n.gather(1, end) - c_n[:, :nbins]
@@ -104,7 +163,7 @@ def box_scan(c_n, c_y, p, durations, total_n, total_y, noise, nbins):
     return best, best_t0, best_d, best_depth
 
 
-def bls_power(t, f, noise, periods, durations, oversample=3):
+def bls_power(t, f, noises, periods, durations, oversample=3):
     """Vectorized BLS in PyTorch (GPU when available): depth SNR per period.
 
     For each batch of periods, folds the light curve into phase bins (scatter_add) and evaluates every
@@ -127,7 +186,7 @@ def bls_power(t, f, noise, periods, durations, oversample=3):
         c_n, c_y = fold(time, flux, p, nbins)
         best, best_t0, best_d, best_depth = box_scan(
             c_n, c_y, p, torch.as_tensor(durations, dtype=real, device=device),
-            total_n, total_y, float(noise), nbins)
+            total_n, total_y, torch.as_tensor(noises, dtype=real, device=device), nbins)
         for array, value in zip(out, (best, best_t0, best_d, best_depth)):
             array[start:start + len(p)] = value.cpu().numpy()
     out[1] += origin  # in numpy float64: the absolute epoch (~2.46e6 d) does not fit in float32
@@ -137,42 +196,50 @@ def bls_power(t, f, noise, periods, durations, oversample=3):
 def bls(time, rel, p_min=.5, p_max=100., max_signals=MAX_SIGNALS):
     """Periodic signals by BLS, masking each one before searching for the next.
 
-    Power is the depth SNR (robust noise per 10-min bin), comparable across period ranges;
-    the SDE is measured within each range against its own spectrum.
+    Power is the depth SNR with the noise measured at each duration's timescale (correlated noise
+    included), comparable across period ranges. The SDE is reported for each signal, not used as a gate.
     """
     t, f = binned(time, rel)
     baseline = t[-1] - t[0]
     p_max = min(p_max, baseline / 2)
-    hours = np.array([.75, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 13, 16])
     found = []
     keep = np.ones(len(t), bool)
-    for _ in range(max_signals):
-        if p_max <= p_min or keep.sum() < 100:
+    # Vetoed detections are masked and the search continues, so allow extra passes (completeness over speed).
+    for _ in range(2 * max_signals):
+        if len(found) >= max_signals or p_max <= p_min or keep.sum() < 100:
             break
-        noise = 1.4826 * np.median(np.abs(f[keep] - np.median(f[keep])))
+        all_durations = DURATION_HOURS / 24
+        noises = duration_noise(t[keep], f[keep], all_durations)
         best = None
-        edges = [e for e in (p_min, 1.5, 5, 15, p_max) if p_min <= e <= p_max]
-        # Period ranges with compatible durations (BLS needs duration < shortest period of the range).
+        edges = [p_min] + [e for e in PERIOD_EDGES if p_min < e < p_max] + [p_max]
         for lo, hi in zip(edges[:-1], edges[1:]):
-            durations = hours[hours / 24 < .15 * lo] / 24
+            # Durations up to a quarter of the shortest period of the range and at most ~3x the central
+            # duration of a Sun-like star at its longest period (low-density stars). No lower bound:
+            # grazing transits can be short at any period (completeness over speed).
+            chosen = (all_durations < .25 * lo) & (all_durations < 3 * SOLAR_DURATION(hi))
             grid = period_grid(lo, hi, baseline)
-            if len(grid) < 10 or len(durations) == 0:
+            if len(grid) < 10 or not chosen.any():
                 continue
-            snr, epochs, widths, depths = bls_power(t[keep], f[keep], noise, grid, durations)
+            snr, epochs, widths, depths = bls_power(t[keep], f[keep], noises[chosen], grid, all_durations[chosen])
             power = snr - spectrum_trend(snr)
             i = int(np.argmax(snr))
             # Robust SDE: harmonics of a strong signal do not inflate the spectrum scale.
-            sde = (power[i] - np.median(power)) / (1.4826 * np.median(np.abs(power - np.median(power))))
+            scale = 1.4826 * np.median(np.abs(power - np.median(power)))
+            sde = (power[i] - np.median(power)) / scale if scale > 0 else np.inf
             if best is None or snr[i] > best['snr']:
                 best = {'snr': float(snr[i]), 'sde': float(sde), 'period_days': float(grid[i]),
+                        'noise': float(noises[chosen][int(np.argmin(np.abs(all_durations[chosen] - widths[i])))]),
                         'epoch_bjd': float(epochs[i]), 'duration_hours': float(widths[i] * 24),
                         'bls_depth_ppm': float(depths[i] * 1e6)}
-        if best is None or best['snr'] < MIN_BLS_SNR or best['sde'] < MIN_SDE:
+        if best is None or best['snr'] < MIN_BLS_SNR:
             break
         # Leftover of a signal already found (same period or harmonic): mask without recording again.
         repeated = any(abs(best['period_days'] / (prior['period_days'] * r) - 1) < .01
                        for prior in found for r in (1, 2, .5, 3, 1 / 3))
-        if not repeated:
+        noise = best.pop('noise')
+        shape = (best['period_days'], best['epoch_bjd'], best['duration_hours'] / 24)
+        if (not repeated and consistent(t[keep], f[keep], noise, *shape)
+                and not edge_dominated(t[keep], *shape)):
             found.append(best)
         # ±1.5 durations: BLS tends to underestimate the duration and leave ingress/egress for the next pass.
         keep &= np.abs(wrap(t - best['epoch_bjd'], best['period_days'])) > 1.5 * best['duration_hours'] / 24

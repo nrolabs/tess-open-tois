@@ -139,13 +139,38 @@ curve, TRICERATOPS cannot rule out very close companions. Treat it as a follow-u
 TRICERATOPS downloads a TESScut image cutout per sector; with a slow or busy connection this can
 take tens of minutes per candidate, and a failed cutout is reported as an FPP error.
 
+## Transit search (`search.py`)
+
 The BLS search runs on the GPU (PyTorch, float64): for each batch of periods the light curve is
-folded into phase bins and every window and duration is evaluated with cumulative sums. On a star
-with an 8-year baseline (473 thousand periods) it takes ~40 s versus ~5 min on the CPU. It uses
-SNR with robust noise and a robust SDE per period range. In single-sector injections on planet-host
-stars it recovered 87% of transits deeper than 3,000 ppm and ~47% between 1,000 and 3,000 ppm, with
-spurious detections in 4% of light curves without an injected signal. The training report measures
-recovery of the full pipeline (BLS, vetting and CNN).
+folded into phase bins and every window and duration is evaluated with cumulative sums. Design,
+following the SPOC TPS:
+
+- **Red-noise-aware SNR.** The noise of the in-transit mean is measured at each tested duration's
+  timescale, so correlated noise is included. Detection requires SNR ≥ 7.1 (the TPS MES threshold).
+  The SDE is reported but not used as a gate: it rejected real signals with few transits.
+- **Narrow period ranges** (0.5–100 d in 13 ranges), each testing durations from 0.5 h up to a
+  quarter of its shortest period, so short-period, long-duration transits are not found at 2P.
+- **Consistency veto.** A detection that does not survive removing its strongest event (it should
+  keep about SNR·√((N−1)/N)) rests on a single event and is rejected.
+- **Edge veto.** A detection whose in-transit points mostly lie within 0.5 d of a data gap is
+  rejected; scattered-light ramps and filter edges were the main source of false alarms.
+- Up to 3 signals per star, masking ±1.5 durations after each one; harmonics of a signal already
+  found are not reported again.
+
+Calibration on 300 single-sector injections into planet-host stars (known transits removed),
+binned by expected SNR (white noise at 10-minute bins), with false alarms measured on inverted
+light curves, where no astrophysical transit exists:
+
+| Expected SNR | 7.1–10 | 10–15 | 15–25 | 25–50 | > 50 | False alarms (inverted) |
+|---|---|---|---|---|---|---|
+| Before (white-noise SNR + SDE gate) | 13% | 27% | 65% | 85% | 83% | ~4% |
+| Now | 12–18% | 67–73% | 88–90% | 93–98% | 98–99% | 19% |
+
+Higher false alarms are the intended trade-off: a missed planet is lost for good, while a false
+alarm still goes through vetting, the CNN and TRICERATOPS. Not yet state of the art (the Kepler TPS
+reaches ~100% from MES ≈ 10–12): the next steps are robust biweight detrending and correcting edge
+ramps instead of vetoing them. A star with an 8-year baseline (473 thousand periods) takes ~3 min.
+The training report measures recovery of the full pipeline (BLS, vetting and CNN).
 
 ## Generated files
 

@@ -4,7 +4,8 @@ import torch
 from data import aws_url, field_stars, masks_for, FIELD_SECTORS
 from lightcurve import wrap
 from neural import AveragePool
-from search import bls, flatten, inject, period_grid, match_known, tier, SOLAR_DURATION
+from search import (bls, flatten, inject, period_grid, match_known, tier, consistent, edge_dominated,
+                    SOLAR_DURATION)
 from vetting import refine, analyze
 
 SUN = {'radius': 1., 'logg': 4.44, 'teff': 5778., 'tmag': 10.}
@@ -44,6 +45,37 @@ class SearchTests(unittest.TestCase):
         best = bls(star['time_bjd'], flatten(star['time_bjd'], star['flux'], star['sector']), p_max=13)[0]
         self.assertLess(abs(wrap(best['epoch_bjd'] - 2459001., 3.)), .03)
         self.assertGreater(best['epoch_bjd'], 2.4e6)
+
+    def test_few_transit_signal_is_detected(self):
+        # Two transits in one sector used to be rejected by the SDE gate despite SNR > 40.
+        t = 2459000 + np.arange(0, 27, 2 / 1440)
+        flux = 1 + np.random.default_rng(5).normal(0, .001, len(t))
+        flux[np.abs(wrap(t - 2459004., 11.)) < .1] -= .004
+        found = bls(t, flatten(t, flux, np.ones(len(t))), p_max=13, max_signals=1)
+        self.assertTrue(found)
+        self.assertAlmostEqual(found[0]['period_days'], 11., delta=.1)
+
+    def test_short_period_long_duration_not_aliased(self):
+        # A 4.7 h transit at P = 1.07 d used to be found at 2P for lack of long durations.
+        rng = np.random.default_rng(6)
+        t = 2459000 + np.arange(0, 27, 2 / 1440)
+        flux = 1 + rng.normal(0, .001, len(t))
+        flux[np.abs(wrap(t - 2459000.5, 1.07)) < 4.7 / 48] -= .003
+        found = bls(t, flatten(t, flux, np.ones(len(t))), p_max=13, max_signals=1)
+        self.assertAlmostEqual(found[0]['period_days'], 1.07, delta=.01)
+
+    def test_single_event_is_vetoed(self):
+        t = np.arange(0, 27, 10 / 1440)
+        f = np.random.default_rng(7).normal(0, .001, len(t))
+        f[np.abs(t - 5.) < .1] -= .01  # one deep dip; the "second transit" at 15 d has nothing
+        self.assertFalse(consistent(t, f, .001, 10., 5., .2))
+        f[np.abs(t - 15.) < .1] -= .01
+        self.assertTrue(consistent(t, f, .001, 10., 5., .2))
+
+    def test_edge_veto(self):
+        t = np.r_[np.arange(0, 13, 10 / 1440), np.arange(14, 27, 10 / 1440)]
+        self.assertTrue(edge_dominated(t, 13.95, 12.95, .2))  # events at 12.95 (gap) and 26.9 (end of data)
+        self.assertFalse(edge_dominated(t, 5., 3., .2))
 
     def test_refine_recovers_drifted_ephemeris(self):
         star = star_with_transit(period=3., epoch=2459001.)
