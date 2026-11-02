@@ -162,7 +162,9 @@ def refine_event(ref, event):
     centers = torch.as_tensor(event['epoch_bjd'] + np.arange(-duration / 2, duration / 2 + 1e-9, BIN_DAYS),
                               dtype=torch.float64, device=dev)
     best = None
-    for d in duration * np.linspace(.5, 1.5, 21):
+    # Within the searched durations: below 2 h, flares (inverted), cosmic rays and jitter dominate.
+    trials = np.clip(duration * np.linspace(.5, 1.5, 21), SINGLE_HOURS[0] / 24, SINGLE_HOURS[-1] / 24)
+    for d in np.unique(trials):
         n, depth, error = window_stats(ref, centers, d)
         snr = torch.where(n >= MIN_COVERAGE * d / BIN_DAYS, depth / error, torch.full_like(depth, -float('inf')))
         j = int(torch.argmax(snr))

@@ -258,7 +258,8 @@ dips appear with the opposite sign there and are counted accordingly):
 
 The V-shape rule and the noise ceiling are physical rules, not tuned on these numbers; the
 calibration only chose the SNR threshold (8: about one false event per 100 stars).
-INJECTION_PLACEHOLDER
+Detection sensitivity was measured by injecting one long-period transit (150–1000 d, physical
+trapezoid) into real field light curves; the final numbers are pending a rerun with the GPU free.
 
 ## Pixel-level source test (`pixels.py`)
 
@@ -321,6 +322,9 @@ Updated on 2026-11-02. Done items are kept with the evidence that closed them.
 | Priority | Item | Status |
 |---|---|---|
 | P0 | Benchmark against ExoMiner++ | Open. Published scores for 147,568 TCEs S1–67 ([Zenodo](https://zenodo.org/record/15466292), [paper](https://arxiv.org/abs/2502.09790)); same TCEs and labels |
+| P1 | Gaia DR3: RUWE (unresolved binaries), eclipsing binary catalogue (~2M), neighbour positions | Open. Cheap catalogue query; would add a binarity test and widen the known-binary cross-match |
+| P1 | TESS FFI light curves (TESS-SPOC, QLP) for sectors without 120 s data | Open. More transits per star and better alias pruning for duos |
+| P1 | ExoFOP high-resolution imaging contrast curves for TRICERATOPS | Open. The usual way to reach FPP < 1% |
 | P1 | Weak signals (SNR 7–10), where TLS still recovers more | Open. A limb-darkened template was tried and rejected (see Transit search) |
 | P1 | Classifier for single and duo events | Open. Today they are vetted by physical rules only |
 | P1 | TTV handling | Open. Strong TTVs may fail the ephemeris and BLS assumptions |
