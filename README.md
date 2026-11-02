@@ -1,27 +1,26 @@
-# TESS — busca e triagem de candidatos a exoplanetas
+# TESS — exoplanet candidate search and vetting
 
-Pipeline completo sobre dados públicos do TESS:
+End-to-end pipeline on public TESS data:
 
-1. **Coleta** do catálogo TOI e de todas as curvas SPOC de 120 s das estrelas rotuladas.
-2. **Busca cega** de trânsitos periódicos (BLS) em cada estrela.
-3. **CNN multivista** (ensemble de 5 modelos) que pontua cada sinal.
-4. **Testes de falso positivo** locais: SNR, número de trânsitos, ímpar/par, eclipse
-   secundário, forma, tamanho físico, densidade estelar, localização da fonte pelo
-   centroide e contaminação.
-5. **Probabilidade de falso positivo** (FPP/NFPP) com TRICERATOPS, usando estrelas vizinhas
-   do TIC/Gaia e as aberturas SPOC.
-6. **Ranking** em `reports/candidates.csv`, separando sinais que correspondem a TOIs dos que estão
-   fora do TOI. "Fora do TOI" ainda não exclui TCEs do SPOC nem binárias eclipsantes conhecidas.
+1. **Collection** of the TOI catalog and of every SPOC 120 s light curve of the labeled stars.
+2. **Blind search** for periodic transits (BLS on the GPU) in each star.
+3. **Multi-view CNN** (5-model ensemble) scoring each signal.
+4. **Local false positive tests**: SNR, number of transits, odd/even, secondary eclipse, shape,
+   physical size, stellar density, transit source location from the centroid, and contamination.
+5. **False positive probability** (FPP/NFPP) with TRICERATOPS, using TIC/Gaia neighbors and the
+   SPOC apertures.
+6. **Ranking** in `reports/candidates.csv`, separating signals that match a TOI from those not in
+   the TOI catalog. "Not in TOI" does not yet exclude SPOC TCEs or known eclipsing binaries.
 
-O resultado final é um **candidato com evidência estatística**, não um planeta confirmado.
-Confirmação exige observações que um computador não substitui (imagem de alta resolução,
-espectroscopia, velocidade radial). Candidatos fortes podem ser enviados à comunidade pelo
+The final result is a **candidate with statistical evidence**, not a confirmed planet. Confirmation
+needs observations a computer cannot replace (high-resolution imaging, spectroscopy, radial
+velocities). Strong candidates can be submitted to the community through
 [ExoFOP-TESS](https://exofop.ipac.caltech.edu/tess/).
 
-## Comandos
+## Commands
 
-Requisitos: Python 3.12 com `venv`/`pip` (ambiente principal), Python 3.13 (ambiente do
-TRICERATOPS), `curl`, GNU Make, GPU NVIDIA com CUDA e internet.
+Requirements: Python 3.12 with `venv`/`pip` (main environment), Python 3.13 (TRICERATOPS
+environment), `curl`, GNU Make, an NVIDIA GPU with CUDA, and internet access.
 
 ```bash
 make setup PYTHON=/path/to/python3
@@ -32,147 +31,168 @@ make train
 make candidates
 ```
 
-| Comando | O que faz |
+| Command | What it does |
 |---|---|
-| `make setup` | Cria `.venv` (CNN, PyTorch CUDA) e `.venv-fpp` (TRICERATOPS) e testa a GPU |
-| `make catalog` | Baixa o catálogo TOI completo e registra origem/hash |
-| `make curves` | Baixa/retoma todas as curvas SPOC 120 s das estrelas CP/KP/FP/FA |
-| `make curves FIELD=100` | Baixa 100 estrelas **sem TOI** com ≥30 setores (amostra fixa, todos os setores) para buscar planetas novos |
-| `make train` | Validação cruzada por estrela, ensemble final, calibração e injeção-recuperação |
-| `make candidates` | Busca em todas as estrelas baixadas (BLS na GPU); `TIC=...` para uma estrela |
-| `make test` | Testes locais, sem rede |
+| `make setup` | Creates `.venv` (CNN, PyTorch CUDA) and `.venv-fpp` (TRICERATOPS) and tests the GPU |
+| `make catalog` | Downloads the full TOI catalog and records source/hash |
+| `make curves` | Downloads/resumes every SPOC 120 s light curve of CP/KP/FP/FA stars |
+| `make curves FIELD=100` | Downloads 100 **non-TOI** stars with ≥30 sectors (fixed sample, all sectors) to search for new planets |
+| `make train` | Cross-validation by star, final ensemble, calibration and injection-recovery |
+| `make candidates` | Searches every downloaded star (BLS on the GPU); `TIC=...` for one star; `FIELD=1` for the non-TOI sample only |
+| `make test` | Local tests, no network |
 
-Avaliar um evento específico (período em dias, época em BJD TDB, duração em horas):
+Vet a specific event (period in days, epoch in BJD TDB, duration in hours):
 
 ```bash
 make candidates TIC=1528696 PERIOD=0.8820624 EPOCH=2458438.402842 DURATION=0.5759672
 ```
 
-Neste computador o Python do sistema não tem pip, por isso o `PYTHON=` acima. O
-TRICERATOPS 1.1.0 exige `numpy<2` no Python 3.12 e por isso roda isolado em `.venv-fpp`
-(Python 3.13, `FPP_PYTHON=` muda o interpretador); o pipeline o chama por subprocesso.
+On this machine the system Python has no pip, hence the `PYTHON=` above. TRICERATOPS 1.1.0 needs
+`numpy<2` on Python 3.12, so it runs isolated in `.venv-fpp` (Python 3.13; `FPP_PYTHON=` changes
+the interpreter) and the pipeline calls it as a subprocess.
 
-## Coleta
+## Code
 
-- Catálogo: [NASA Exoplanet Archive / TAP](https://exoplanetarchive.ipac.caltech.edu/docs/TAP/usingTAP.html), consulta `select * from toi`.
-- [Definições TOI](https://exoplanetarchive.ipac.caltech.edu/docs/API_TOI_columns.html): `CP`/`KP` → classe 1;
-  `FP`/`FA` → classe 0. `PC`, `APC` e desconhecidos ficam fora do treino.
-- Curvas: os [manifestos por setor da MAST](https://archive.stsci.edu/tess/bulk_downloads.html)
-  (`tesscurl_sector_N_lc.sh`) listam todos os arquivos SPOC 120 s. Filtrar esses manifestos pelos
-  TICs do catálogo dá a lista exata, sem busca estrela por estrela. Os arquivos vêm da cópia pública
-  na AWS (`stpubdata`, Open Data), com a MAST como reserva. O TIC sai do nome do arquivo:
-  correspondência exata, sem resolver nomes de estrelas vizinhas.
-- `--include-candidates` (em `python tess.py download`) baixa também PC/APC, que servem para
-  busca mas não entram no treino.
-- Interrompa com Ctrl+C e repita `make curves` para retomar. FITS truncados por downloads
-  interrompidos são detectados e baixados de novo.
+| File | Responsibility |
+|---|---|
+| `tess.py` | Command-line interface used by the Makefile |
+| `data.py` | TOI catalog, MAST manifests, light curve download and loading |
+| `lightcurve.py` | Transit-protected detrending, phase folding, CNN views |
+| `vetting.py` | False positive tests and the CNN scalar features |
+| `neural.py` | Dataset with per-star cache, CNN, cross-validated training, inference |
+| `search.py` | GPU BLS search, candidate pipeline, injection-recovery |
+| `fpp.py` | TRICERATOPS runner (isolated environment) |
 
-Em 2026-11 eram 2.657 TICs rotulados elegíveis, dos quais 2.357 têm curva SPOC 120 s:
-15.834 arquivos, ~29 GB de FITS e ~2,5 GB de `.npz`.
+## Data collection
 
-## Modelo
+- Catalog: [NASA Exoplanet Archive / TAP](https://exoplanetarchive.ipac.caltech.edu/docs/TAP/usingTAP.html), query `select * from toi`.
+- [TOI definitions](https://exoplanetarchive.ipac.caltech.edu/docs/API_TOI_columns.html): `CP`/`KP` → class 1;
+  `FP`/`FA` → class 0. `PC`, `APC` and unknown dispositions are left out of training.
+- Light curves: the [MAST per-sector manifests](https://archive.stsci.edu/tess/bulk_downloads.html)
+  (`tesscurl_sector_N_lc.sh`) list every SPOC 120 s file. Filtering them by catalog TICs gives the
+  exact file list, with no star-by-star search. Files come from the public AWS copy (`stpubdata`,
+  Open Data), with MAST as fallback. The TIC comes from the file name: exact match, no name
+  resolution to neighboring stars.
+- `--include-candidates` (in `python tess.py download`) also downloads PC/APC stars, which can be
+  searched but are not used for training.
+- Interrupt with Ctrl+C and rerun `make curves` to resume. FITS files truncated by interrupted
+  downloads are detected and downloaded again. Original FITS files are kept.
 
-- Entrada: vista global (ciclo inteiro), local (±3 durações), ímpar e par lado a lado, e
-  secundária (fase 0,5), cada uma com canal de cobertura, mais 14 escalares medidos (profundidade,
-  SNR, ímpar/par, secundário, forma, duração/período, trânsitos, centroide, contaminação, raio,
-  log g, Teff, magnitude e densidade). IDs, disposição e parâmetros físicos do catálogo não entram;
-  período/época/duração do catálogo só orientam o alinhamento.
-- Cada TOI vira um exemplo com **todos os setores juntos**. No treino, cada setor isolado também
-  vira exemplo (aumento de dados); validação e teste usam só o exemplo completo.
-- Outros planetas da mesma estrela são mascarados ao medir um sinal.
-- A efeméride do catálogo é refinada dentro de 3σ das suas incertezas, e setores em que ela não
-  localiza o trânsito (3σ > 1 duração) são descartados.
-- CNN 1D com blocos residuais, um ramo por vista. Treino exclusivamente CUDA, determinístico, AMP.
-- **Validação cruzada aninhada por TIC**: 5 folds; cada estrela é testada exatamente uma vez por um
-  modelo que nunca a viu; a validação de cada fold sai das estrelas restantes. O modelo final é o
-  ensemble dos 5. O limiar (precisão-alvo `PRECISION`) e a calibração isotônica do ensemble vêm das
-  predições fora do fold. Se nenhum limiar atinge a precisão com 5 seleções, `threshold: null`.
-- O relatório registra métricas por fold, agregadas, por estrela, por faixa de profundidade,
-  período, SNR e número de setores, a taxa de reprovação de cada teste de vetting por classe e a
-  injeção-recuperação.
+In 2026-11 there were 2,657 eligible labeled TICs, of which 2,357 have SPOC 120 s light curves:
+15,834 files, ~29 GB of FITS and ~2.5 GB of `.npz`. At ~0.9 MB/s this takes ~10 hours.
 
-## Testes de falso positivo (`vetting.py`)
+## Model
 
-| Teste | Reprova (`fail`) | Avisa (`warn`) |
+- Input: global view (full orbit), local view (±3 durations), odd and even transits side by side,
+  and secondary view (phase 0.5), each with a coverage channel, plus 14 measured scalars (depth,
+  SNR, odd/even, secondary, shape, duration/period, transits, centroid, contamination, radius,
+  log g, Teff, magnitude and density). IDs, dispositions and catalog physical parameters are not
+  inputs; the catalog period/epoch/duration only drive the alignment.
+- Each TOI becomes one example with **all sectors combined**. In training, each single sector is
+  also an example (augmentation); validation and test use only the combined example.
+- Other planets of the same star are masked while measuring a signal.
+- The catalog ephemeris is refined within 3σ of its uncertainties, and sectors where it cannot
+  locate the transit (3σ > 1 duration) are dropped.
+- 1D CNN with residual blocks, one branch per view. CUDA-only, deterministic, mixed-precision
+  training.
+- **Nested cross-validation by TIC**: 5 folds; each star is tested exactly once by a model that
+  never saw it; each fold's validation set comes from the remaining stars. The final model is the
+  ensemble of the 5. The threshold (target precision `PRECISION`) and the ensemble's isotonic
+  calibration come from the out-of-fold predictions. If no threshold reaches the precision with 5
+  selections, `threshold: null`.
+- The report records per-fold, pooled and per-star metrics, metrics by depth, period, SNR and
+  number of sectors, the rejection rate of each vetting test per class, and injection-recovery.
+
+## False positive tests (`vetting.py`)
+
+| Test | Rejects (`fail`) | Warns (`warn`) |
 |---|---|---|
-| SNR (caixa de 80% da duração, ruído correlacionado e dispersão entre eventos) | < 7,1 | |
-| Trânsitos com dados | < 2 | |
-| Ímpar/par (≥2 eventos em cada grupo) | > 4σ | > 3σ |
-| Eclipse secundário em qualquer fase, limiar de Bonferroni, exigindo superar o maior abrilhantamento e albedo > 1 | > 5σ | acima do limiar |
-| Raio do companheiro (profundidade × raio estelar) | > 25 R⊕ | |
-| Fonte do sinal pelo centroide (posição da fonte vs. alvo, via WCS) | > 4σ e > 21″ | > 3σ e > 10″ |
-| Forma em V (trapézio) | | ingresso > 40% |
-| Duração longa demais para a densidade estelar | | razão < 0,2 |
-| Contaminação (CROWDSAP) | | < 0,8 |
+| SNR (box of 80% of the duration, correlated noise and event-to-event scatter) | < 7.1 | |
+| Transits with data | < 2 | |
+| Odd/even (≥2 events in each group) | > 4σ | > 3σ |
+| Secondary eclipse at any phase, Bonferroni threshold, must exceed the largest brightening and imply albedo > 1 | > 5σ | above threshold |
+| Companion radius (depth × stellar radius) | > 25 R⊕ | |
+| Transit source from the centroid (source vs. target position, via WCS) | > 4σ and > 21″ | > 3σ and > 10″ |
+| V shape (trapezoid fit) | | ingress > 40% |
+| Duration too long for the stellar density | | ratio < 0.2 |
+| Contamination (CROWDSAP) | | < 0.8 |
 
-Esses limiares serão recalibrados com o conjunto completo, usando `vetting_by_class` em
-`reports/training.json`. Na amostra inicial (116 TOIs), 16% dos CP/KP e 36% dos FP/FA foram
-reprovados. Parte das reprovações de planetas é SNR baixo em estrelas ainda com poucos setores
-baixados. Muitos FPs do catálogo só foram identificados com observações de solo, e o vetting
-não os vê. Eles ficam para a CNN e o NFPP.
+These thresholds will be recalibrated on the full dataset using `vetting_by_class` in
+`reports/training.json`. On an early sample (116 TOIs), 16% of CP/KP and 36% of FP/FA were
+rejected. Part of the planet rejections is low SNR on stars that still had few sectors downloaded.
+Many catalog FPs were identified only with ground-based observations that vetting cannot see; those
+are left to the CNN and the NFPP.
 
-## Classes finais (`make candidates`)
+## Final tiers (`make candidates`)
 
-| Classe | Critério |
+| Tier | Criterion |
 |---|---|
-| `forte` | CNN acima do limiar, vetting aprovado, FPP < 1% e NFPP < 0,1% (versão mais rígida do critério de [Giacalone et al. 2021](https://ui.adsabs.harvard.edu/abs/2021AJ....161...24G), que usa FPP < 1,5%) |
-| `candidato: provável planeta` | CNN acima do limiar, vetting aprovado, FPP < 50% e NFPP < 0,1% |
-| `candidato: sem FPP` | CNN e vetting aprovados, TRICERATOPS não calculado |
-| `inconclusivo` | CNN abaixo do limiar ou FPP alto |
-| `rejeitado` | vetting reprovado, ou NFPP > 10% (sinal provavelmente de estrela vizinha) |
+| `strong` | CNN above threshold, vetting passed, FPP < 1% and NFPP < 0.1% (stricter version of the [Giacalone et al. 2021](https://ui.adsabs.harvard.edu/abs/2021AJ....161...24G) criterion, which uses FPP < 1.5%) |
+| `candidate: likely planet` | CNN above threshold, vetting passed, FPP < 50% and NFPP < 0.1% |
+| `candidate: no FPP` | CNN and vetting passed, TRICERATOPS not computed |
+| `inconclusive` | CNN below threshold or high FPP |
+| `rejected` | Vetting failed, or NFPP > 10% (signal likely from a nearby star) |
 
-Mesmo `forte` é validação estatística **sem** imagem de alta resolução: sem curva de contraste, o
-TRICERATOPS não descarta companheiras muito próximas. Trate como prioridade para acompanhamento.
+Even `strong` is statistical validation **without** high-resolution imaging: without a contrast
+curve, TRICERATOPS cannot rule out very close companions. Treat it as a follow-up priority.
 
-A busca BLS roda na GPU (PyTorch, float64): para cada lote de períodos, a curva é dobrada em caixas de fase e todas as janelas e durações são avaliadas por somas acumuladas; numa estrela com 8 anos de baseline (473 mil períodos) leva ~40 s contra ~5 min na CPU. Usa SNR com ruído robusto e SDE robusto por faixa de período. Em injeções num
-setor de estrelas hospedeiras de planetas, ela recuperou 87% dos trânsitos acima de 3.000 ppm e
-~47% entre 1.000 e 3.000 ppm, com detecção espúria em 4% das curvas sem sinal injetado. O
-relatório de treino mede a recuperação do pipeline completo (BLS, vetting e CNN).
+TRICERATOPS downloads a TESScut image cutout per sector; with a slow or busy connection this can
+take tens of minutes per candidate, and a failed cutout is reported as an FPP error.
 
-## Arquivos gerados
+The BLS search runs on the GPU (PyTorch, float64): for each batch of periods the light curve is
+folded into phase bins and every window and duration is evaluated with cumulative sums. On a star
+with an 8-year baseline (473 thousand periods) it takes ~40 s versus ~5 min on the CPU. It uses
+SNR with robust noise and a robust SDE per period range. In single-sector injections on planet-host
+stars it recovered 87% of transits deeper than 3,000 ppm and ~47% between 1,000 and 3,000 ppm, with
+spurious detections in 4% of light curves without an injected signal. The training report measures
+recovery of the full pipeline (BLS, vetting and CNN).
 
-| Caminho | Conteúdo |
+## Generated files
+
+| Path | Content |
 |---|---|
-| `data/catalogs/toi.json`, `.csv`, `snapshot.json`, `snapshots/` | Catálogo, origem, hash e versões |
-| `data/manifests/sector-N.sh` | Manifestos oficiais por setor (cache) |
-| `data/mast/lc/*.fits` | FITS originais, preservados |
-| `data/curves/<TIC>/sector-N.npz` | Tempo BJD TDB, fluxo PDCSAP, erro e centroides MOM_CENTR |
-| `data/curves/<TIC>/sector-N.json` | Produto, CROWDSAP, parâmetros estelares do TIC, posição do alvo no CCD |
-| `data/features/<TIC>.pkl` | Cache das features e métricas por estrela |
-| `data/fpp/` | Entradas e saídas do TRICERATOPS |
-| `data/download-log.json` | Erros do último download |
-| `models/transit-cnn.pt` | Ensemble, limiar e calibração |
-| `reports/training.json` | Métricas, folds, subgrupos, vetting por classe, injeção-recuperação |
-| `reports/skipped.json` | Exemplos excluídos e motivo |
-| `reports/candidates/<TIC>.json` | Sinais de cada estrela com métricas, CNN, FPP e classe |
-| `reports/candidates.csv` | Ranking de todos os sinais |
+| `data/catalogs/toi.json`, `.csv`, `snapshot.json`, `snapshots/` | Catalog, source, hash and versions |
+| `data/manifests/sector-N.sh` | Official per-sector manifests (cache) |
+| `data/mast/lc/*.fits` | Original FITS files, kept |
+| `data/curves/<TIC>/sector-N.npz` | BJD TDB time, PDCSAP flux, error and MOM_CENTR centroids |
+| `data/curves/<TIC>/sector-N.json` | Product, CROWDSAP, TIC stellar parameters, target CCD position |
+| `data/field.json` | Current non-TOI sample (`FIELD=N`) |
+| `data/features/<TIC>.pkl` | Per-star feature and metric cache |
+| `data/fpp/` | TRICERATOPS inputs and outputs |
+| `data/download-log.json` | Errors from the last download |
+| `models/transit-cnn.pt` | Ensemble, threshold and calibration |
+| `reports/training.json` | Metrics, folds, subgroups, vetting per class, injection-recovery |
+| `reports/skipped.json` | Excluded examples and reason |
+| `reports/candidates/<TIC>.json` | Signals of each star with metrics, CNN, FPP and tier |
+| `reports/candidates.csv` | Ranking of every signal |
 
-## Limites
+## Limitations
 
-- Rótulos TOI (CP/KP vs FP/FA) não representam a mistura de sinais de uma busca cega: a calibração
-  da CNN vale para essa população, não para "qualquer queda de brilho".
-- A busca só cobre estrelas baixadas. Há 585.858 estrelas com curva 120 s sem TOI (~3 TB); `FIELD=N`
-  baixa uma amostra fixa das 4.662 com ≥30 setores (nenhuma chega a 50), com todos os setores. O SPOC já buscou sinais nessas
-  estrelas: o espaço de descoberta está em sinais fracos que só aparecem juntando setores.
-- Só curvas SPOC 120 s; FFIs (QLP, TESS-SPOC) e dados de pixels completos não entram.
-- A injeção-recuperação usa trânsitos trapezoidais sem escurecimento de borda, um setor por vez.
-- Sistemas com variação de tempo de trânsito (TTV) forte podem falhar nos testes de efeméride.
-- O projeto não envia nada automaticamente a ExoFOP, Zooniverse ou qualquer serviço.
+- TOI labels (CP/KP vs FP/FA) do not represent the mix of signals in a blind search: the CNN
+  calibration applies to that population, not to "any dip in brightness".
+- The search only covers downloaded stars. There are 585,858 non-TOI stars with 120 s light curves
+  (~3 TB); `FIELD=N` downloads a fixed sample of the 4,662 with ≥30 sectors (none reach 50), with all
+  sectors. SPOC already searched these stars: the discovery space is in weak signals that only
+  appear when sectors are combined.
+- SPOC 120 s light curves only; FFIs (QLP, TESS-SPOC) and full pixel data are not used.
+- Injection-recovery uses trapezoidal transits without limb darkening, one sector at a time.
+- Systems with strong transit timing variations (TTV) may fail the ephemeris tests.
+- The project never submits anything automatically to ExoFOP, Zooniverse or any other service.
 
-## Próximas etapas (anotado, não implementado)
+## Roadmap (noted, not implemented)
 
-Proposta de evolução discutida em 2026-11-01. São prioridades, não melhorias já demonstradas.
+Evolution proposal discussed on 2026-11-01. These are priorities, not demonstrated improvements.
 
-| Prioridade | Recurso | Benefício esperado | Observação |
+| Priority | Feature | Expected benefit | Notes |
 |---|---|---|---|
-| P0 | Imagens de diferença e análise de pixels | Identificar a verdadeira fonte do trânsito | Exige TPFs (~10× as curvas): baixar só para candidatos |
-| P0 | Treinamento com sinais de busca cega | Reduzir falsos positivos fora da população TOI | População: TCEs do SPOC ([bulk TCE](https://archive.stsci.edu/tess/bulk_downloads/bulk_downloads_tce.html)) + [catálogo de binárias eclipsantes TESS](https://cdsarc.cds.unistra.fr/ftp/J/ApJS/258/16) (Prša et al. 2022) |
-| P0 | Benchmark contra ExoMiner++ | Comparação mensurável | Scores publicados de 147.568 TCEs S1–67 ([Zenodo](https://zenodo.org/record/15466292), [artigo](https://arxiv.org/abs/2502.09790)); mesmos TCEs e rótulos; superioridade não é garantida |
-| P0 | Cruzar sinais com TCEs e binárias conhecidas | Rótulo "NOVO" confiável | Hoje "NOVO" só significa "não está no TOI" |
-| P1 | TLS + BLS + busca de trânsitos únicos | Sinais que a BLS perde | Trânsito único: planetas de período longo |
-| P1 | Dados FFI e curvas de 20 s | Mais estrelas e sinais | Volume muito maior; limitado por banda e disco |
-| P1 | Modelo temporal com atenção | Dependências entre eventos e setores | Avaliar contra o CNN atual no benchmark |
-| P1 | Tratamento de TTV | Planetas não estritamente periódicos | |
-| P1 | Modelo de ruído correlacionado | Sensibilidade a sinais fracos | |
-| P2 | Ensemble heterogêneo | Combinar erros distintos | |
-| P2 | Incerteza e detecção fora de distribuição | Evitar confiança excessiva | |
+| P0 | Difference images and pixel analysis | Identify the true transit source | Needs TPFs (~10× the light curves): download only for candidates |
+| P0 | Training on blind-search signals | Fewer false positives outside the TOI population | Population: SPOC TCEs ([TCE bulk](https://archive.stsci.edu/tess/bulk_downloads/bulk_downloads_tce.html)) + [TESS eclipsing binary catalog](https://cdsarc.cds.unistra.fr/ftp/J/ApJS/258/16) (Prša et al. 2022) |
+| P0 | Benchmark against ExoMiner++ | Measurable comparison | Published scores for 147,568 TCEs S1–67 ([Zenodo](https://zenodo.org/record/15466292), [paper](https://arxiv.org/abs/2502.09790)); same TCEs and labels; superiority is not guaranteed |
+| P0 | Cross-match signals with TCEs and known binaries | Reliable "new" label | Today "not in TOI" only means not in the TOI catalog |
+| P1 | TLS + BLS + single-transit search | Signals BLS misses | Single transits: long-period planets |
+| P1 | FFI data and 20 s light curves | More stars and signals | Much larger volume; limited by bandwidth and disk |
+| P1 | Temporal model with attention | Dependencies across events and sectors | Evaluate against the current CNN in the benchmark |
+| P1 | TTV handling | Planets that are not strictly periodic | |
+| P1 | Correlated noise model | Sensitivity to weak signals | |
+| P2 | Heterogeneous ensemble | Combine different errors | |
+| P2 | Uncertainty and out-of-distribution detection | Avoid overconfidence | |
