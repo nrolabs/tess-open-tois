@@ -48,8 +48,8 @@ def main():
     s.add_argument('--field', action='store_true', help='Only the non-TOI stars downloaded with make curves FIELD=N')
     s.add_argument('--open', action='store_true', help='Only the stars of open TOIs downloaded with make curves OPEN=1')
     s.add_argument('--workers', type=int, default=1,
-                   help='Stars searched at once on the GPU (1: the GPU is already saturated by one star, and the
-                   main process needs GPU memory for the CNN)')
+                   help='Stars searched at once on the GPU (1: one star already saturates it, and the main '
+                        'process needs GPU memory for the CNN)')
     s.set_defaults(func=candidates)
     r = sub.add_parser('report', help='MCMC transit fit, figures, LaTeX/PDF report and ExoFOP CTOI row')
     r.add_argument('--tic', type=int, required=True)
