@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 import numpy as np
 import torch
 from data import aws_url, field_stars, masks_for, FIELD_SECTORS
@@ -140,6 +141,20 @@ class SearchTests(unittest.TestCase):
         from search import json_safe
         value = json_safe({'a': float('nan'), 'b': [np.inf, np.float64(2.)], 'c': np.int64(3), 'd': np.bool_(True)})
         self.assertEqual(value, {'a': None, 'b': [None, 2.], 'c': 3, 'd': True})
+
+    def test_open_tois_are_pc_without_follow_up(self):
+        import tempfile
+        import data
+        rows = ['TIC ID,TOI,TFOPWG Disposition,Time Series Observations,Spectroscopy Observations,Imaging Observations',
+                '1,100.01,PC,0,0,0', '2,101.01,PC,1,0,0', '3,102.01,CP,0,0,0', '4,103.01,,0,0,', '4,103.02,APC,0,0,0']
+        with tempfile.TemporaryDirectory() as folder:
+            original = data.EXOFOP_TOI
+            data.EXOFOP_TOI = Path(folder) / 'toi.csv'
+            data.EXOFOP_TOI.write_text('\n'.join(rows) + '\n')
+            try:
+                self.assertEqual(data.open_tois(), {1: ['100.01'], 4: ['103.01']})
+            finally:
+                data.EXOFOP_TOI = original
 
     def test_tier_rules(self):
         ok, bad = {'verdict': 'pass'}, {'verdict': 'fail'}

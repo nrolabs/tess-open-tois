@@ -499,6 +499,9 @@ def run_candidates(args):
     if args.field:
         field = {int(t) for t in json.loads((DATA / 'field.json').read_text())}
         stars = [t for t in stars if t in field]
+    if args.open:
+        chosen = {int(t) for t in json.loads((DATA / 'open.json').read_text())}
+        stars = [t for t in stars if t in chosen]
     REPORTS.mkdir(parents=True, exist_ok=True)
     model_id = Path(ROOT / 'models' / 'transit-cnn.pt').stat().st_mtime
     version = code_version()

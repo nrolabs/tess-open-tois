@@ -29,6 +29,8 @@ def main():
     d.add_argument('--include-candidates', action='store_true', help='Also PC/APC (not used for training)')
     d.add_argument('--field', type=int, default=0,
                    help='Instead of labeled stars: N non-TOI stars with >=30 sectors (all of them), for new planets')
+    d.add_argument('--open', action='store_true',
+                   help='Instead of labeled stars: stars of open TOIs (PC with no follow-up on ExoFOP), all sectors')
     d.set_defaults(func=data.download)
     tr = sub.add_parser('train')
     tr.add_argument('--epochs', type=int, default=100)
@@ -44,6 +46,7 @@ def main():
     s.add_argument('--duration', type=float, help='Hours')
     s.add_argument('--no-fpp', action='store_true', help='Skip TRICERATOPS')
     s.add_argument('--field', action='store_true', help='Only the non-TOI stars downloaded with make curves FIELD=N')
+    s.add_argument('--open', action='store_true', help='Only the stars of open TOIs downloaded with make curves OPEN=1')
     s.add_argument('--workers', type=int, default=4, help='Parallel processes (each uses the GPU for BLS)')
     s.set_defaults(func=candidates)
     r = sub.add_parser('report', help='MCMC transit fit, figures, LaTeX/PDF report and ExoFOP CTOI row')

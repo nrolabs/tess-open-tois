@@ -19,6 +19,10 @@ CAT = DATA / 'catalogs' / 'toi.json'
 KNOWN = DATA / 'catalogs' / 'known.json'
 TCE_INDEX = 'https://archive.stsci.edu/tess/bulk_downloads/bulk_downloads_tce.html'
 TCE_FILE = re.compile(r'/missions/tess/catalogs/tce/[^"]+_dvr-tcestats\.csv')
+# ExoFOP TOI table: dispositions plus the number of follow-up observations of each TOI.
+EXOFOP_TOI = DATA / 'catalogs' / 'exofop_toi.csv'
+EXOFOP_TOI_URL = 'https://exofop.ipac.caltech.edu/tess/download_toi.php?sort=toi&output=csv'
+FOLLOW_UP = ('Time Series Observations', 'Spectroscopy Observations', 'Imaging Observations')
 EB_URL = 'https://archive.stsci.edu/hlsps/tess-ebs/hlsp_tess-ebs_tess_lcf-ffi_s0001-s0026_tess_v1.0_cat.csv'
 TAP = 'https://exoplanetarchive.ipac.caltech.edu/TAP/sync'
 CTOI_URL = 'https://exofop.ipac.caltech.edu/tess/download_ctoi.php?sort=ctoi&output=csv'
@@ -184,6 +188,7 @@ def catalog(args):
             raise ValueError('Unexpected catalog response')
         save_json(CAT, records)
         save_json(KNOWN, known_catalog())
+        EXOFOP_TOI.write_text(fetch_text(EXOFOP_TOI_URL))
         rows.cache_clear()
         known_signals_all.cache_clear()
         known_by_star.cache_clear()
@@ -330,8 +335,22 @@ def field_stars(products, toi, n):
     return {tic: sorted(products[tic], key=int) for tic in pool[:n]}
 
 
+def open_tois():
+    """TOIs still open: TFOPWG disposition PC (or none yet) and no follow-up observation of any kind
+    (time series, spectroscopy, imaging) on ExoFOP. Returns {TIC: [TOI, ...]}."""
+    from collections import defaultdict
+    if not EXOFOP_TOI.exists():
+        raise FileNotFoundError(f'{EXOFOP_TOI} missing; run make catalog')
+    out = defaultdict(list)
+    for r in csv.DictReader(io.StringIO(EXOFOP_TOI.read_text())):
+        if r['TFOPWG Disposition'] in ('PC', '') and all(int(r[k] or 0) == 0 for k in FOLLOW_UP):
+            out[int(r['TIC ID'])].append(r['TOI'])
+    return dict(out)
+
+
 def download(args):
-    """SPOC 120 s light curves of labeled stars, or of a non-TOI sample (--field), via MAST manifests."""
+    """SPOC 120 s light curves of labeled stars, of a non-TOI sample (--field) or of the stars of open
+    TOIs (--open), via MAST manifests."""
     from collections import defaultdict
     from concurrent.futures import ProcessPoolExecutor, as_completed
     products = defaultdict(dict)
@@ -346,6 +365,12 @@ def download(args):
         save_json(DATA / 'field.json', {str(t): s for t, s in chosen.items()})
         selected = {(t, s): products[t][s] for t, sectors in chosen.items() for s in sectors}
         print(f'{len(chosen)} non-TOI stars with >= {FIELD_SECTORS} sectors, all sectors', flush=True)
+    elif args.open:
+        chosen = open_tois()
+        save_json(DATA / 'open.json', {str(t): tois for t, tois in sorted(chosen.items())})
+        selected = {(t, s): p for t in chosen if t in products for s, p in products[t].items()}
+        print(f'{len(chosen)} stars with open TOIs (PC, no follow-up); '
+              f'{len({t for t, _ in selected})} have 120 s light curves, all sectors', flush=True)
     else:
         tics = {int(r['tid']) for r in rows() if eligible(r)
                 and (r['tfopwg_disp'] in LABELS or args.include_candidates)}
@@ -365,7 +390,8 @@ def download(args):
                 log.append({'tic': tic, 'sector': sector, 'product': filename, 'error': str(exc)[-500:]})
                 print(f'[{done}/{len(pending)}] TIC {tic} sector {sector} error: {str(exc)[-200:]}', flush=True)
             if done % 100 == 0 or done == len(pending):
-                save_json(DATA / ('download-field-log.json' if args.field else 'download-log.json'), log)
+                name = 'download-field-log.json' if args.field else 'download-open-log.json' if args.open else 'download-log.json'
+                save_json(DATA / name, log)
                 print(f'[{done}/{len(pending)}] {len(log)} errors', flush=True)
     print(f'Done: {len(pending) - len(log)}/{len(pending)}; rerun the command to retry the errors.')
 
