@@ -1,4 +1,10 @@
 """Photometric preparation: transit-protected detrending, phase folding and CNN views."""
+import multiprocessing
+
+# Worker processes that use CUDA must be spawned (a forked child cannot initialize CUDA).
+SPAWN = multiprocessing.get_context('spawn')
+# BIWEIGHT_BLOCK is sized so that this many GPU processes fit in 8 GB.
+GPU_WORKERS = 4
 
 # CNN input: (view, channels, bins); even channels = flux, odd channels = coverage.
 VIEWS = (('global', 2, 101), ('local', 2, 61), ('odd_even', 4, 61), ('secondary', 2, 61))

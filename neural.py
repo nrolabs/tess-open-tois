@@ -14,7 +14,7 @@ from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.metrics import average_precision_score, roc_auc_score, confusion_matrix
 from data import (ROOT, CAT, DATA, LABELS, rows, eligible, downloaded_stars, load_star, select_sectors,
                   masks_for, save_json)
-from lightcurve import VIEWS
+from lightcurve import VIEWS, SPAWN, GPU_WORKERS
 from vetting import SCALARS, analyze
 
 FEATURE_VERSION = 3
@@ -66,7 +66,7 @@ def cached_examples(tic, tois):
     return examples, skipped
 
 
-def dataset(workers=12):
+def dataset(workers=GPU_WORKERS):
     """Labeled examples from all downloaded stars, cached per star in data/features/."""
     from collections import defaultdict
     from concurrent.futures import ProcessPoolExecutor
@@ -76,7 +76,7 @@ def dataset(workers=12):
             by_star[int(r['tid'])].append(r)
     stars = [t for t in downloaded_stars() if any(r['tfopwg_disp'] in LABELS for r in by_star.get(t, []))]
     examples, skipped = [], []
-    with ProcessPoolExecutor(max_workers=workers) as pool:
+    with ProcessPoolExecutor(max_workers=workers, mp_context=SPAWN) as pool:
         for done, (e, s) in enumerate(pool.map(cached_examples, stars, [by_star[t] for t in stars],
                                                chunksize=4), 1):
             examples += e

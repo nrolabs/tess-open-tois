@@ -1,21 +1,17 @@
 """Blind transit search (BLS), candidate pipeline and injection-recovery test."""
 import csv
 import json
-import multiprocessing
 import subprocess
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
 from data import ROOT, DATA, load_star, select_sectors, downloaded_stars, star_tois, masks_for, save_json
-from lightcurve import prepare, trend, segments, wrap
+from lightcurve import prepare, trend, segments, wrap, SPAWN, GPU_WORKERS
 from vetting import analyze, stellar_density, G, DAY
 
 FPP_PYTHON = ROOT / '.venv-fpp' / 'bin' / 'python'
 REPORTS = ROOT / 'reports' / 'candidates'
-# Processes using CUDA (BLS) cannot be forked from a process that already opened the GPU.
-SPAWN = multiprocessing.get_context('spawn')
-GPU_WORKERS = 4
 # Detection is gated on red-noise-aware SNR, like the SPOC TPS (MES >= 7.1); the SDE is only reported,
 # because it is unstable for signals with few transits. Vetting does the false positive triage.
 MIN_BLS_SNR = 7.1
