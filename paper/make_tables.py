@@ -85,7 +85,7 @@ def main():
         else:
             reasons['other'] += 1
     write('missed.tex', f'''
-Of the {len(missed)} TOIs not recovered, {reasons['short']} have periods below the 0.5\\,d limit of
+Of the {len(missed)} TOIs not recovered, {reasons['short']} {'has a period' if reasons['short'] == 1 else 'have periods'} below the 0.5\\,d limit of
 the periodic search, {reasons['long']} are single transits or have periods beyond 100\\,d (their
 events were found by the long-period search but rejected by its conservative vetting or not
 detected), {reasons['weak']} have a catalogue SNR below 10, and {reasons['other']} have higher SNR:
@@ -111,7 +111,7 @@ detected.''')
 \\startdata
 {body}
 \\enddata
-\\tablecomments{{Catalogued: matches a TOI, CTOI, published planet, SPOC TCE or known eclipsing binary.}}
+\\tablecomments{{Tiers refer to the initial search, before supplementary testing. Catalogued signals match a TOI, CTOI, published planet, SPOC TCE or known eclipsing binary; these counts are not restricted to the open TOIs.}}
 \\end{{deluxetable}}''')
 
     # CNN performance.
@@ -133,7 +133,7 @@ Precision at threshold & {cv['precision']:.3f} ({lo:.3f}--{hi:.3f}) \\\\
 Recall at threshold & {cv['recall']:.3f} \\\\
 Confusion (TP, FP, FN, TN) & {tp}, {fp}, {fn}, {tn} \\\\
 \\enddata
-\\tablecomments{{Out-of-fold scores of five models, folds grouped by star; the threshold targets 95\\% precision.
+\\tablecomments{{Out-of-fold scores of five models, folds grouped by star; fold-specific validation thresholds target 95\\% precision.
 The precision interval is the Wilson 95\\% interval.}}
 \\end{{deluxetable}}''')
 
@@ -168,7 +168,7 @@ The precision interval is the Wilson 95\\% interval.}}
 \\enddata
 \\tablecomments{$T_0$ in BJD$_{\\rm TDB}$; $T_{\\rm eq}$ for zero albedo and full redistribution. CNN is the calibrated
 classifier score. FPP and NFPP from ten TRICERATOPS runs (mean and error of the mean), without
-high-resolution imaging. All four difference images place the source within 2$''$ of the target.}
+high-resolution imaging. Three significant difference images are consistent with the target position; the image for TOI-7888.01 is not significant. Zero NFPP values reflect numerical estimates, not an exclusion of all contaminating sources.}
 \\end{deluxetable*}''')
 
     # Inconclusive recovered TOIs, with the supplementary pixel test and FPP.
@@ -190,18 +190,17 @@ high-resolution imaging. All four difference images place the source within 2$''
     below = [x for x in inconclusive if not x[2].get('cnn_selected')]
     selected = [x for x in inconclusive if x[2].get('cnn_selected')]
     write('inconclusive_text.tex', f'''
-{len(inconclusive)} recovered TOIs pass the photometric vetting but are not candidates.
+{len(inconclusive)} recovered TOIs passed the photometric vetting and were initially classified as inconclusive.
 {len(below)} score below the classifier threshold (raw scores
 {min(x[2].get('cnn_score') or 0 for x in below):.2f}--{max(x[2].get('cnn_score') or 0 for x in below):.3f}, threshold {threshold:.3f}).
 The other {len(selected)} (marked with $\\dagger$ in Table~\\ref{{tab:inconclusive}}) are selected by the classifier,
 but the search \\texttt{{TRICERATOPS}} result falls outside the candidate criterion
 (FPP\\,$\\geq 50\\%$, or $0.1\\% \\leq$\\,NFPP\\,$\\leq 10\\%$).
-For this paper, difference images and \\texttt{{TRICERATOPS}} (three runs) were computed for all of them
-({len(done)} completed). {low} have FPP\\,$<1\\%$ and NFPP\\,$<0.1\\%$,
+Difference images and \\texttt{{TRICERATOPS}} (three runs) were computed for {'all of them' if len(done) == len(inconclusive) else f'{len(done)} of them'}. {'None has' if low == 0 else str(low) + ' have'} FPP\\,$<1\\%$ and NFPP\\,$<0.1\\%$,
 {likely} have FPP\\,$<50\\%$ and NFPP\\,$<0.1\\%$, {nearby} have NFPP\\,$>10\\%$ (signal likely from a
 neighbour), and {offset} show a significant difference-image offset ($>4\\sigma$ and $>0.5$ pixel).
-These signals are not counted as candidates, but the low-FPP cases that lie on target are natural
-follow-up targets.''')
+Signals above the NFPP or offset limits would be rejected by these tests; they are kept in the
+table to show the full group.''')
     rows = []
     for toi, t, e, extra in inconclusive:
         f = (extra or {}).get('fpp') or {}
@@ -215,7 +214,7 @@ follow-up targets.''')
     write('inconclusive.tex', '''
 \\startlongtable
 \\begin{deluxetable*}{lcccccccccc}
-\\tablecaption{Recovered open TOIs that pass the vetting but are not candidates.\\label{tab:inconclusive}}
+\\tablecaption{Initially inconclusive recovered TOIs: supplementary source tests and false-positive probabilities.\\label{tab:inconclusive}}
 \\tablehead{\\colhead{TOI} & \\colhead{TIC} & \\colhead{$P$ (d)} & \\colhead{Depth (ppm)} & \\colhead{SNR} &
 \\colhead{$R_p$ ($R_\\oplus$)} & \\colhead{CNN} & \\colhead{FPP} & \\colhead{NFPP} & \\colhead{Offset ($''$)} & \\colhead{Offset ($\\sigma$)}}
 \\startdata
@@ -223,7 +222,7 @@ follow-up targets.''')
 \\enddata
 \\tablecomments{Depth, SNR and radius from the box model of the vetting; FPP and NFPP from three
 TRICERATOPS runs; offset of the difference-image source from the target. Dashes: not computed or
-image not significant.}
+image not significant. Membership in this table follows the initial search tier; supplementary rejection criteria are discussed in the text.}
 \\end{deluxetable*}''')
 
     # Uncatalogued signals that pass the vetting.
@@ -248,6 +247,7 @@ tests as a starting point for inspection, not as planet candidates.''')
     write('new.tex', '''
 \\startlongtable
 \\begin{deluxetable*}{lcccccccccccc}
+\\tabletypesize{\\scriptsize}
 \\tablecaption{Signals that pass the photometric vetting and match no catalogued signal.\\label{tab:new}}
 \\tablehead{\\colhead{TIC} & \\colhead{Host TOI} & \\colhead{$P$ (d)} & \\colhead{$T_0-2460000$} & \\colhead{$T_{14}$ (h)} &
 \\colhead{Depth (ppm)} & \\colhead{SNR} & \\colhead{$N_{\\rm tr}$} & \\colhead{$R_p$ ($R_\\oplus$)} & \\colhead{CNN} &
@@ -260,7 +260,7 @@ the supplementary analysis (three TRICERATOPS runs).}
 \\end{deluxetable*}''')
 
     # Long-period injection-recovery.
-    injection = Path(sys.argv[1]) if len(sys.argv) > 1 else None
+    injection = Path(sys.argv[1]) if len(sys.argv) > 1 else PAPER / 'data' / 'long_period_injections.json'
     if injection and injection.exists():
         res = json.loads(injection.read_text())
         fair = [r for r in res if not (r['flags'] or {}).get('too_large')]
@@ -273,8 +273,8 @@ the supplementary analysis (three TRICERATOPS runs).}
                              f"{100 * np.mean([r['verdict'] == 'pass' for r in b]):.0f}\\% passing ({len(b)} injections)")
         write('single_injection.tex', 'For single transits with periods of 150--1000\\,d injected into the '
               'same light curves, by expected SNR: ' + '; '.join(parts) + '.')
-    else:
-        write('single_injection.tex', '')
+    elif not (TABLES / 'single_injection.tex').exists():
+        raise FileNotFoundError('Long-period injection results are required for the paper')
     print('tables written:', sorted(p.name for p in TABLES.glob('*.tex')))
     print(f'recovered {len(recovered)}/{n_open}, missed {len(missed)}, inconclusive {len(inconclusive)} '
           f'({len(done)} with supplementary), new {len(new)}')

@@ -3,39 +3,33 @@
 \usepackage{amsmath}
 \input{tables/numbers.tex}
 
-\shorttitle{Independent vetting of unobserved TOIs}
+\shorttitle{Vetting TOIs without recorded follow-up}
 \shortauthors{Ruas}
 
 \begin{document}
 
-\title{Independent Search and Vetting of TESS Objects of Interest Without Follow-up Observations}
+\title{Independent Search and Vetting of TESS Objects of Interest Without Follow-up Observations Recorded on ExoFOP}
 
 \author[0000-0002-3986-8048]{Isak Paulo de Andrade Ruas}
 \affiliation{NROLABS}
 \email{isakruas@gmail.com}
 
 \begin{abstract}
-Several hundred TESS Objects of Interest (TOIs) still carry the planet-candidate disposition without
-a single follow-up observation recorded on ExoFOP. We present an open-source pipeline that searches
-the SPOC 120\,s light curves of their host stars blindly and vets every signal with a sequence of
-independent tests: a red-noise-aware box least-squares search, a single- and two-transit search for
-long periods, photometric and centroid diagnostics, a test against systematics shared by stars on
-the same CCD, a multi-view convolutional neural network trained with star-grouped nested
-cross-validation on 2277 dispositioned TOIs, difference images from target pixel files, and the
-false-positive probabilities of \texttt{TRICERATOPS}. Applied to the \nStars{} stars
-that host the \nOpen{} open TOIs with 120\,s data, the blind search recovers
-\nRecovered{} of them. Four signals (TOI-3025.01, TOI-4674.01, TOI-7850.01 and
-TOI-7888.01) pass every test, three of them are located on the target star by their difference
-images, and all have nearby false-positive probabilities below $10^{-6}$
-and false-positive probabilities of 1.7--34\%; none reaches the 1\% level
-required for statistical validation, mainly because their radii (6.7--13.9\,$R_\oplus$) cannot
-exclude low-mass stellar companions without radial velocities. We report limb-darkened transit
-fits for the four and the vetting results of the other recovered TOIs. Difference images and
-false-positive probabilities computed for the vetted TOIs that are not candidates place the sources
-of TOI-4802.01 and TOI-7701.01 off target and give four on-target signals false-positive
-probabilities of 1--5\%. We also list \nNew{} signals
-that pass the photometric vetting but do not match any catalogued TOI, community TOI, published
-planet, SPOC threshold-crossing event or known eclipsing binary. All code and results are public.
+TESS Objects of Interest (TOIs) without follow-up observations recorded on ExoFOP offer a
+well-defined sample for reassessing follow-up priorities using archival photometry. We search
+the SPOC 120\,s light curves of \nStars{} stars hosting \nOpen{} such TOIs and recover
+\nRecovered{} of the catalogued signals. The analysis combines periodic and isolated-transit
+searches with photometric, centroid and instrumental diagnostics, a convolutional neural network
+evaluated with cross-validation grouped by star, difference imaging, and \texttt{TRICERATOPS}
+false-positive probabilities. Four TOIs meet our candidate-selection criteria: TOI-3025.01,
+TOI-4674.01, TOI-7850.01 and TOI-7888.01. Three have significant difference images consistent
+with the target position; the fourth lacks a significant image. Their nearby false-positive
+probabilities are below $10^{-6}$, but their false-positive probabilities are 1.7--34\%, above
+the 1\% validation threshold, because their radii (6.7--13.9\,$R_\oplus$) do not exclude
+stellar companions. Supplementary tests identify two initially inconclusive TOIs with
+significant source offsets and four with source positions consistent with the target and
+false-positive probabilities of approximately 1--5\%. We also report \nNew{} signals that pass
+photometric vetting but have no match in the catalogues searched.
 \end{abstract}
 
 \keywords{Exoplanet detection methods (489) --- Transit photometry (1709) --- Convolutional neural
@@ -47,17 +41,21 @@ The Transiting Exoplanet Survey Satellite \citep[TESS;][]{Ricker2015} has produc
 TESS Objects of Interest \citep[TOIs;][]{Guerrero2021}. Their confirmation relies on the TESS
 Follow-up Observing Program (TFOP), which coordinates ground-based photometry, high-resolution
 imaging and spectroscopy. Follow-up capacity is limited, and on 2026 November 2 the ExoFOP archive
-listed \nOpenAll{} TOIs with the planet-candidate (PC) disposition and no
-time-series, spectroscopic or imaging observation of any kind.
+listed \nOpenAll{} TOIs with a planet-candidate (PC) or empty working-group disposition and no
+recorded time-series, spectroscopic or imaging observations. Absence of an ExoFOP record does not
+establish that a target has never been observed elsewhere.
 
 For such targets an independent, fully automated analysis of the public TESS data can help to
-prioritize follow-up: it can confirm that the signal is recovered blindly, that it does not show the
-photometric signatures of eclipsing binaries, that it is located on the target star, and how probable
-the astrophysical false-positive scenarios are. Machine-learning vetting of TESS signals
+prioritize follow-up by assessing signal recovery, testing for photometric signatures of eclipsing
+binaries, constraining the source position, and estimating probabilities for astrophysical
+false-positive scenarios. Machine-learning vetting of TESS signals
 \citep[e.g.][]{Yu2019,Tey2023,Valizadegan2022} and statistical validation with
 \texttt{TRICERATOPS} \citep{Giacalone2021} are established tools; here they are combined with a
-blind search, a long-period single-transit search and a pixel-level source test in one open
-pipeline, and applied to the open TOIs.
+blind search, a long-period single-transit search and a pixel-level source test in one
+pipeline, and applied to the open TOIs. ExoMiner++ \citep{Valizadegan2025} already provides
+deep-learning classifications for TESS two-minute threshold-crossing events using several
+diagnostic inputs. Our contribution is a reassessment of the TOIs without recorded follow-up,
+with a blind search of their light curves and difference-image source tests.
 
 Section~\ref{sec:data} describes the data and the sample, Section~\ref{sec:methods} the pipeline and
 its calibration, Section~\ref{sec:results} the results, and Section~\ref{sec:discussion} their
@@ -75,8 +73,8 @@ The ExoFOP TOI table was retrieved on 2026 November 2. We define a TOI as \emph{
 working group disposition is PC (or empty) and the numbers of time-series, spectroscopic and imaging
 observations recorded on ExoFOP are all zero. This yields \nOpenAll{} TOIs on
 \nOpenStarsAll{} stars, of which \nStars{} stars
-(\nOpen{} TOIs) have SPOC 120\,s light curves; the rest were alerted from full-frame
-images only and are outside the scope of this work. The host stars have TESS magnitudes
+(\nOpen{} TOIs) have SPOC 120\,s light curves in our data set; the remaining targets are
+outside the scope of this work. The host stars have TESS magnitudes
 \tmagRange{} and \sectorRange{} sectors of 120\,s data.
 
 \subsection{Training set}
@@ -113,7 +111,8 @@ the detectable signals at false-alarm rates of 1\%, 5\% and 10\%, compared to 69
 within the bootstrap uncertainties, and TLS recovers more signals at SNR\,7--10.
 
 \subsection{Long-period search}
-Planets with periods beyond $\sim$100\,d leave one to three transits in the light curve. After masking
+Depending on the observing baseline and gaps, long-period planets may produce only one or a few
+observed transits. After masking
 the periodic signals and every catalogued transit, the light curve is detrended with windows of
 three durations and searched with a matched box filter at every time step for durations of 2--25\,h,
 with the correlated noise of each sector; events with single-event SNR\,$\geq 8$ are refined in time
@@ -126,9 +125,10 @@ light curve gives the strongest dip that its own noise produces, and the event m
 period aliases $\Delta t/n$ are pruned when a predicted transit falls on covered data without a dip.
 On the inverted light curves of 100 stars with at least 30 sectors, about one noise event per 100
 stars survives this vetting. \input{tables/single_injection.tex} The vetting of isolated events is
-therefore conservative: below SNR\,40 about half of the real transits are rejected, mostly by the
-noise ceiling of variable stars and by their proximity to data gaps, in exchange for a false-alarm
-rate of about one event per 100 stars.
+therefore conservative: only 9--50\% of injections in the tested SNR bins below 40 pass the full
+selection. The small numbers in each bin limit the precision of these recovery estimates.
+The inverted-light-curve result is an empirical noise check, not a measurement of the astrophysical
+false-positive rate.
 
 \subsection{Photometric vetting}\label{sec:vetting}
 Every periodic signal is phase-folded with a transit-protected detrending and tested for: SNR with
@@ -163,13 +163,21 @@ catalogue planet parameters, and the catalogue ephemeris is only used to align t
 labelled TOI contributes one example with all sectors and, for training only, one example per sector.
 Training uses AdamW with class weighting and early stopping on a validation set.
 
-Performance is estimated with nested cross-validation grouped by star: each star is in the test fold
-of exactly one of five models, whose weights and threshold are fixed before the test fold is scored.
-The threshold maximizes recall at an empirical precision of 95\%, and the out-of-fold scores are
-calibrated by isotonic regression. Selection compares the raw ensemble score with the threshold;
-the calibrated score is reported as a probability, and because the isotonic map is a step function,
-selected and unselected signals can share the same calibrated value. Table~\ref{tab:cnn} lists the cross-validated performance; the
-five models form the ensemble used for the search.
+Performance is estimated with five outer folds grouped by star. Within each outer training set,
+one of four stratified, star-grouped splits provides the validation set for early stopping and
+threshold selection. Each star is in exactly one outer test set, scored after the model weights
+and threshold are fixed. The validation threshold maximizes recall subject to
+empirical precision of at least 95\% and at least five selected examples. Training uses a maximum
+of 100 epochs, batches of 64 examples and an early-stopping patience of 15 epochs.
+Table~\ref{tab:cnn} reports the held-out predictions with these fold-specific thresholds; the
+measured precision is 94.4\%.
+
+For the search, we average the five model scores and apply a final threshold selected from the
+pooled out-of-fold predictions. An isotonic regression fitted to those predictions maps raw scores
+to calibrated scores. The final threshold and calibration are not tested on an independent set,
+so the calibrated value is a classifier score rather than a planet probability. Because the
+calibration map is a step function, selected and unselected signals can share the same calibrated
+score.
 
 \input{tables/cnn.tex}
 
@@ -195,23 +203,37 @@ and the nearby false-positive probability (NFPP) from the folded transit, the TI
 neighbours and the SPOC apertures. We provide the pixel geometry from the aperture extension of the
 local light-curve files instead of TESScut image cutouts; the relative pixel positions agree with
 TESScut to 0.001 pixel. The FPP is a Monte Carlo estimate whose run-to-run scatter is significant:
-the search averages three runs, and the candidate fits ten. Following \citet{Giacalone2021}, a signal
-is statistically validated when FPP\,$<1\%$ and NFPP\,$<0.1\%$; without high-resolution imaging this is
-an upper bound on the validation strength.
+the search averages three runs, and the candidate analysis averages ten.
+\citet{Giacalone2021} adopt FPP\,$<1.5\%$ and NFPP\,$<0.1\%$ as validation criteria.
+We use the more conservative FPP\,$<1\%$ threshold with the same NFPP limit.
+Both probabilities depend on the scenario priors and on the available
+constraints; without high-resolution imaging, close companions are constrained only by the TIC and
+Gaia.
 
 \subsection{Tiers}
 A signal is \emph{rejected} when a vetting test or the pixel test fails or when NFPP\,$>10\%$;
 \emph{inconclusive} when it passes the vetting but not the classifier threshold, or passes both but
 has FPP\,$\geq 50\%$ or $0.1\% \leq$\,NFPP\,$\leq 10\%$; a \emph{candidate}
-when it passes both and has FPP\,$<50\%$ and NFPP\,$<0.1\%$; and \emph{strong} when FPP\,$<1\%$.
+when it passes both and has FPP\,$<50\%$ and NFPP\,$<0.1\%$; and \emph{strong} when a candidate
+also has FPP\,$<1\%$. A difference image that is not significant neither passes nor fails the
+pixel test.
 In the search, difference images and \texttt{TRICERATOPS} are only computed for signals selected by
-the classifier; for this paper they were also computed for the inconclusive signals of the open
-sample (Section~\ref{sec:inconclusive}).
+the classifier; we also computed them for the inconclusive signals of the open sample
+(Section~\ref{sec:inconclusive}). Table~\ref{tab:summary} gives the tiers of the search, before
+these additional tests.
 
 \subsection{Transit fits}
 The four candidates are fitted with a quadratic limb-darkened model \citep{Mandel2002} with the
 $q_1,q_2$ parameterization \citep{Kipping2013}, free mid-transit time, period, radius ratio, impact
-parameter, stellar density, flux offset and white noise, uniform priors, and circular orbits. The
+parameter, stellar density, flux offset and white-noise amplitude, assuming circular orbits.
+Priors are uniform in the sampled coordinates: $R_p/R_\star\in(0.001,0.5)$,
+$b\in(0,1.5)$, $\log_{10}[\rho_\star/({\rm g\,cm^{-3}})]\in(-3,2)$,
+$q_1,q_2\in(0,1)$, relative flux offset $f_0\in(-0.01,0.01)$, and
+$\ln\sigma\in(-14,-2)$ for relative-flux noise amplitude $\sigma$.
+The mid-transit time is restricted to half an initial transit duration on either side of its
+initial estimate, and the period to $\pm0.1\%$ of its initial estimate. We require
+$b\leq1+R_p/R_\star$ and $a/R_\star>1+R_p/R_\star$.
+The density and noise priors are therefore log-uniform, not uniform in linear units. The
 model averages 15 instants per 120\,s exposure; its instantaneous flux matches \texttt{batman}
 \citep{Kreidberg2015} to $10^{-7}$. Errors are scaled by the time-averaging factor $\beta$ for
 correlated noise \citep{Winn2008}, and the posterior is sampled with \texttt{emcee}
@@ -227,14 +249,13 @@ Table~\ref{tab:summary} summarizes the outcome. The blind search recovers
 \input{tables/summary.tex}
 
 \subsection{Candidates}\label{sec:candidates}
-Four recovered TOIs pass every vetting test and are selected by the classifier
+Four recovered TOIs meet the search candidate-selection criteria
 (Table~\ref{tab:candidates}, Figure~\ref{fig:folded}). The difference images of TOI-3025.01,
 TOI-4674.01 and TOI-7850.01 place the transit source 1.3--2.9$''$ from the target, within
 $1.2\sigma$ (Figure~\ref{fig:diff}); TOI-7888.01 has a single 120\,s sector with transits and its
 difference image is not significant (SNR 4.2), so its source is only constrained by the centroid test
-and \texttt{TRICERATOPS}. All four have NFPP\,$\leq 2\times10^{-7}$, so a nearby eclipsing binary is
-excluded, but
-their FPPs (1.7--34\%) are dominated by eclipsing-binary and hierarchical scenarios on the target
+and \texttt{TRICERATOPS}. All four have NFPP\,$\leq 2\times10^{-7}$, so nearby eclipsing binaries
+are unlikely, but their FPPs (1.7--34\%) are dominated by eclipsing-binary and hierarchical scenarios on the target
 itself: with radii of 6.7--13.9\,$R_\oplus$ the transit depth alone cannot distinguish a giant planet
 from a brown dwarf or a low-mass star. TOI-3025.01 (FPP\,$=1.7\pm0.4\%$) is the closest to the
 validation threshold.
@@ -264,7 +285,7 @@ mark the catalogue position of the target; red plus signs the fitted source of t
 \end{figure*}
 
 \clearpage
-\subsection{Inconclusive TOIs}\label{sec:inconclusive}
+\subsection{Supplementary tests of initially inconclusive TOIs}\label{sec:inconclusive}
 \input{tables/inconclusive_text.tex}
 
 \input{tables/inconclusive.tex}
@@ -274,11 +295,10 @@ eclipsing binary: the difference-image source lies $12.8''$ from the target at $
 NFPP\,$=0.99$. TOI-7701.01 ($P=20.6$\,d) has a low FPP (0.04), but its only significant difference
 image (one transit, sector~106) places the source $93''$ (4.4 pixels) from the target at $8\sigma$; the
 FPP does not account for this, and the signal should be treated as a possible blend until more transits
-are imaged. Among the signals that lie on target, TOI-7465.01, TOI-6464.01, TOI-7825.01 and
-TOI-7713.01 have FPP\,$\approx 1$--$5\%$ and NFPP\,$<0.01\%$ from three runs; TOI-7465.01 is also
-classifier-selected, with a search FPP above the candidate limit. These are the closest to the
-candidate criterion and, after the candidates of Section~\ref{sec:candidates}, the next priority for
-follow-up.
+are imaged. Both fail the pixel test. Among the signals located on the target, TOI-7465.01, TOI-6464.01, TOI-7825.01 and TOI-7713.01 have
+FPP\,$\approx 1$--$5\%$ and NFPP\,$<0.01\%$ from three runs.
+TOI-7465.01, with FPP\,$=1.2\%$, has a raw classifier score of 0.856, just below the 0.877
+threshold. These four are worth following up even though the classifier did not select them.
 
 \subsection{Signals not in any catalogue}
 \input{tables/new_text.tex}
@@ -287,7 +307,7 @@ follow-up.
 
 Two of these signals are off target: the difference images of TIC~66620917 ($P=0.62$\,d) and
 TIC~81089255 ($P=66.6$\,d) place the source $17''$ ($12\sigma$) and $94''$ ($26\sigma$) from the
-target, so both are attributed to neighbouring stars. The most planet-like is TIC~420529106
+target, so both are attributed to neighbouring stars. The most promising is TIC~420529106
 ($P=21.96$\,d, four transits, depth 954\,ppm, $R_p\approx2.4\,R_\oplus$, SNR 9.6), with a
 calibrated score of 0.85, FPP\,$=0.03$ and NFPP\,$=0.01$; its difference image is not significant.
 TIC~259606227 ($P=1.06$\,d, $R_p\approx2.8\,R_\oplus$) has FPP\,$=0.07$ but a classifier score of
@@ -295,8 +315,8 @@ TIC~259606227 ($P=1.06$\,d, $R_p\approx2.8\,R_\oplus$) has FPP\,$=0.07$ but a cl
 
 \section{Discussion}\label{sec:discussion}
 
-\textit{Classifier domain.} The network is trained on TOIs, whose negatives already passed the SPOC
-and TOI vetting. Its precision applies to that population. On 200 inverted single-sector light curves
+\textit{Classifier domain.} The network is trained on labelled TOIs, and its precision
+applies to that population. On 200 inverted single-sector light curves
 the full pipeline selected one noise signal, but the classifier was designed for high precision and
 selects about half of the confirmed planets; a classifier score below threshold is weak evidence
 against a planet.
@@ -304,26 +324,36 @@ against a planet.
 \textit{False-positive probabilities.} The FPPs are computed without high-resolution imaging, so
 close bound companions are only constrained by the TIC and Gaia. The Monte Carlo scatter of
 \texttt{TRICERATOPS} is comparable to the differences between some candidates, which is why the
-candidate values average ten runs. None of our signals is statistically validated.
+candidate values average ten runs; the quoted errors cover only this scatter, not the priors. An
+NFPP of zero means that no simulated nearby scenario reproduced the transit, not that contamination
+is excluded. None of our signals is statistically validated.
 
 \textit{Completeness.} The sample is restricted to stars with 120\,s data. The periodic search covers
-0.5--100\,d; shorter and longer periods are only reachable through the single-event search, whose
-vetting is deliberately conservative. TOIs detected in sectors without 120\,s data may be missed.
+0.5--100\,d, and the isolated-event search has limited sensitivity to longer periods.
+TOIs detected in sectors without 120\,s data may be missed. The recovery fraction of catalogued
+TOIs is not a population completeness, and the injection tests use trapezoidal signals.
 
 \textit{Follow-up.} The candidates are suitable for reconnaissance spectroscopy, which would identify
 eclipsing binaries through radial-velocity variations of kilometres per second, and for
-high-resolution imaging, which would lower the FPPs.
+high-resolution imaging, which would constrain close companions and inform revised FPPs.
 
 \section{Conclusions}\label{sec:conclusions}
-An open pipeline that combines a blind periodic and long-period search, photometric, centroid,
+A pipeline that combines a blind periodic and long-period search, photometric, centroid,
 systematic and pixel-level tests, a cross-validated neural network and \texttt{TRICERATOPS} recovers
 \nRecovered{} of the \nOpen{} open TOIs with 120\,s data. Four of them
-pass every test, three are located on their target stars by difference images, and their FPPs
+meet our candidate-selection criteria, three have difference images consistent with the target
+position, and their FPPs
 are 1.7--34\%. We list the
 results for every recovered TOI and the uncatalogued signals that pass the photometric vetting, as a
 prioritization aid for follow-up observations: after the four candidates, the on-target TOIs
 TOI-7465.01, TOI-6464.01, TOI-7825.01 and TOI-7713.01 and the uncatalogued signal of TIC~420529106
 are the most promising.
+
+\section*{Data and code availability}
+The TESS observations used in this work are available from MAST; the TOI catalogue and follow-up
+records were retrieved from ExoFOP as described in Section~\ref{sec:data}.
+The analysis code and results are available at
+\url{https://github.com/nrolabs/tess-open-tois}.
 
 \begin{acknowledgments}
 This paper includes data collected by the TESS mission, funded by the NASA Science Mission
