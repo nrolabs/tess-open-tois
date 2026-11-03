@@ -1,0 +1,80 @@
+{
+  "tic": 273861354,
+  "events": [
+    {
+      "period_days": 13.996654529637487,
+      "epoch_bjd": 2460889.1810988467,
+      "duration_hours": 1.5,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 7686.01",
+        "toi": "7686.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.8620689655172413,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": 0.41066329015595665,
+        "offset_pixels": 0.1479749134560875,
+        "offset_arcsec": 3.107473182577837,
+        "sectors": [
+          {
+            "sector": 95,
+            "transits": 2,
+            "difference_snr": 0.3108562893067051,
+            "used": false
+          },
+          {
+            "sector": 96,
+            "transits": 2,
+            "difference_snr": 5.303262320935197,
+            "used": true,
+            "dx_pixels": -0.13749707337061334,
+            "dy_pixels": 0.05469122257595593,
+            "dx_err": 0.1701037917016864,
+            "dy_err": 0.16192575351726635
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 0.3917844806684725,
+        "nfpp": 0.06045954622510743,
+        "fpp_std": 0.011031936274093792,
+        "nfpp_std": 0.0035397382424567766,
+        "sectors_used": [
+          95,
+          96
+        ],
+        "top_scenarios": [
+          {
+            "id": "273861354",
+            "scenario": "TP",
+            "prob": 0.4742098031505309
+          },
+          {
+            "id": "273861354",
+            "scenario": "SEB",
+            "prob": 0.1324564113002644
+          },
+          {
+            "id": "273861354",
+            "scenario": "PTP",
+            "prob": 0.12335707125533296
+          },
+          {
+            "id": "273861354",
+            "scenario": "EBx2P",
+            "prob": 0.07366436427089418
+          },
+          {
+            "id": "273861354",
+            "scenario": "EB",
+            "prob": 0.05350771181410354
+          }
+        ]
+      }
+    }
+  ]
+}

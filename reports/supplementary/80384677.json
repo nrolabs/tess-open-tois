@@ -1,0 +1,83 @@
+{
+  "tic": 80384677,
+  "events": [
+    {
+      "period_days": 3.6480103366591754,
+      "epoch_bjd": 2460748.3604448377,
+      "duration_hours": 1.5,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 6537.01",
+        "toi": "6537.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.7368421052631579,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": null,
+        "offset_pixels": null,
+        "offset_arcsec": null,
+        "sectors": [
+          {
+            "sector": 90,
+            "transits": 8,
+            "difference_snr": 2.852624860935256,
+            "used": false
+          },
+          {
+            "sector": 99,
+            "transits": 6,
+            "difference_snr": 0.17003739393030903,
+            "used": false
+          },
+          {
+            "sector": 100,
+            "transits": 7,
+            "difference_snr": 0.012145782403134674,
+            "used": false
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 0.7865293235746154,
+        "nfpp": 0.746413660210037,
+        "fpp_std": 0.001485613618260374,
+        "nfpp_std": 0.0015873029468256525,
+        "sectors_used": [
+          90,
+          99,
+          100
+        ],
+        "top_scenarios": [
+          {
+            "id": "937714359",
+            "scenario": "TP",
+            "prob": 0.17129853578205761
+          },
+          {
+            "id": "937714360",
+            "scenario": "NTP",
+            "prob": 0.16126232545807057
+          },
+          {
+            "id": "80384677",
+            "scenario": "NTP",
+            "prob": 0.1558957235350378
+          },
+          {
+            "id": "80384686",
+            "scenario": "NTP",
+            "prob": 0.14184330775826692
+          },
+          {
+            "id": "80384686",
+            "scenario": "NEBx2P",
+            "prob": 0.10744821912671047
+          }
+        ]
+      }
+    }
+  ]
+}

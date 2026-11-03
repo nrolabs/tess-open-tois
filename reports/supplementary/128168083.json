@@ -1,0 +1,73 @@
+{
+  "tic": 128168083,
+  "events": [
+    {
+      "period_days": 3.9050462575447713,
+      "epoch_bjd": 2460805.5461596767,
+      "duration_hours": 3.0,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 7488.01",
+        "toi": "7488.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.8497409326424871,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": 0.8723974947478421,
+        "offset_pixels": 0.1966089612976111,
+        "offset_arcsec": 4.1287881872498335,
+        "sectors": [
+          {
+            "sector": 92,
+            "transits": 6,
+            "difference_snr": 7.985209019750862,
+            "used": true,
+            "dx_pixels": 0.074997042723707,
+            "dy_pixels": 0.1817430253000758,
+            "dx_err": 0.13752954786057878,
+            "dy_err": 0.1426976762747875
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 0.5393281171820519,
+        "nfpp": 0.0013765652586273443,
+        "fpp_std": 0.013411354379922911,
+        "nfpp_std": 0.00010705879585978376,
+        "sectors_used": [
+          92
+        ],
+        "top_scenarios": [
+          {
+            "id": "128168083",
+            "scenario": "EB",
+            "prob": 0.3869556020567625
+          },
+          {
+            "id": "128168083",
+            "scenario": "TP",
+            "prob": 0.34989872056415405
+          },
+          {
+            "id": "128168083",
+            "scenario": "PEB",
+            "prob": 0.16100109275165445
+          },
+          {
+            "id": "128168083",
+            "scenario": "PTP",
+            "prob": 0.08663080113380851
+          },
+          {
+            "id": "128168083",
+            "scenario": "DEB",
+            "prob": 0.005350988892405134
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "tic": 180575165,
+  "model_mtime": 1793631571.719551,
+  "code_version": "c5833c125cc5c10c",
+  "threshold": 0.8765867948532104,
+  "events": [
+    {
+      "tic": 180575165,
+      "search": "bls",
+      "snr": 8.716054161002997,
+      "sde": 11.749914893717369,
+      "period_days": 2.9868262912356016,
+      "epoch_bjd": 2460693.056936534,
+      "duration_hours": 3.0,
+      "bls_depth_ppm": 239.42842082827661,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 6262.01",
+        "toi": "6262.01",
+        "disposition": "PC",
+        "period_ratio": 2,
+        "phase_checked": true
+      },
+      "masks": [],
+      "metrics": {
+        "period_days": 2.9868262912356016,
+        "epoch_bjd": 2460693.056936534,
+        "duration_hours": 3.0,
+        "depth_ppm": 350.1535420567334,
+        "snr": 9.613660721431161,
+        "transits": 19,
+        "odd_depth_ppm": 333.07447372045317,
+        "even_depth_ppm": 365.79967268679513,
+        "odd_even_sigma": 0.3871436855385759,
+        "secondary_depth_ppm": 107.80265742342115,
+        "secondary_sigma": 2.8816438545056546,
+        "secondary_phase": 0.6145833333333334,
+        "secondary_albedo": 13.90944654848819,
+        "secondary_threshold_sigma": 3.492209747375342,
+        "brightening_sigma": 2.622577536850175,
+        "ingress_fraction": 0.39415845450869624,
+        "fitted_duration_hours": 3.1957266411473926,
+        "radius_earth": 3.5639458574925817,
+        "a_over_rstar": 6.721550309174852,
+        "density_ratio": 1.2672185983297708,
+        "centroid_sigma": 5.13746053440356,
+        "source_offset_arcsec": 24.41789344853157,
+        "crowdsap": 0.9049457000000001,
+        "star": {
+          "radius": 1.74573004,
+          "teff": 9532.0,
+          "logg": 4.33971977,
+          "tmag": 9.95510006
+        },
+        "sectors": [
+          88,
+          89
+        ],
+        "flags": {
+          "centroid_offset": "fail"
+        },
+        "verdict": "fail",
+        "tic": 180575165,
+        "catalog_ephemeris": [
+          2.9868262912356016,
+          2460693.056936534
+        ],
+        "common_mode_sigma": -1.9331697859338204
+      },
+      "cnn_score": 0.006587413139641285,
+      "cnn_calibrated": 0.03867403314917127,
+      "cnn_selected": false,
+      "fpp": null,
+      "tier": "rejected: vetting"
+    }
+  ]
+}

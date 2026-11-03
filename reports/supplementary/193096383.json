@@ -1,0 +1,80 @@
+{
+  "tic": 193096383,
+  "events": [
+    {
+      "period_days": 4.856459722698906,
+      "epoch_bjd": 2461048.5141195687,
+      "duration_hours": 3.0,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 7825.01",
+        "toi": "7825.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.7368421052631579,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": 0.09417693619330926,
+        "offset_pixels": 0.06049591160701649,
+        "offset_arcsec": 1.2704141437473464,
+        "sectors": [
+          {
+            "sector": 99,
+            "transits": 4,
+            "difference_snr": 5.361147878765547,
+            "used": true,
+            "dx_pixels": -0.056194914845883126,
+            "dy_pixels": 0.022402831665392142,
+            "dx_err": 0.15168436359840407,
+            "dy_err": 0.16364666226862723
+          },
+          {
+            "sector": 100,
+            "transits": 4,
+            "difference_snr": 4.455381564884936,
+            "used": false
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 0.04315871359979717,
+        "nfpp": 2.948813984383988e-21,
+        "fpp_std": 0.007287322973029764,
+        "nfpp_std": 7.732996196159007e-22,
+        "sectors_used": [
+          99,
+          100
+        ],
+        "top_scenarios": [
+          {
+            "id": "193096383",
+            "scenario": "TP",
+            "prob": 0.7013512421954348
+          },
+          {
+            "id": "193096383",
+            "scenario": "PTP",
+            "prob": 0.25004745998312183
+          },
+          {
+            "id": "193096383",
+            "scenario": "STP",
+            "prob": 0.04178176912096171
+          },
+          {
+            "id": "193096383",
+            "scenario": "SEB",
+            "prob": 0.003655959737635776
+          },
+          {
+            "id": "193096383",
+            "scenario": "DTP",
+            "prob": 0.0027522002961084245
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "tic": 319806044,
+  "events": [
+    {
+      "period_days": 1.3509293853942013,
+      "epoch_bjd": 2460041.6620579595,
+      "duration_hours": 2.5,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 3209.01",
+        "toi": "3209.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.3472222222222222,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": 0.6313775833402742,
+        "offset_pixels": 0.09639020539504972,
+        "offset_arcsec": 2.0241943132960443,
+        "sectors": [
+          {
+            "sector": 64,
+            "transits": 19,
+            "difference_snr": 0.6351149258678381,
+            "used": false
+          },
+          {
+            "sector": 99,
+            "transits": 14,
+            "difference_snr": 10.53997383666189,
+            "used": true,
+            "dx_pixels": 0.004936431327603685,
+            "dy_pixels": -0.14156068178526393,
+            "dx_err": 0.12409089688851317,
+            "dy_err": 0.12015860812923883
+          },
+          {
+            "sector": 100,
+            "transits": 17,
+            "difference_snr": 13.313693247012184,
+            "used": true,
+            "dx_pixels": -0.15668522976433064,
+            "dy_pixels": 0.023063655375692882,
+            "dx_err": 0.12018655683684418,
+            "dy_err": 0.11550111045013492
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 1.0,
+        "nfpp": 0.9892577520373171,
+        "fpp_std": 0.0,
+        "nfpp_std": 0.004147364233728331,
+        "sectors_used": [
+          64
+        ],
+        "top_scenarios": [
+          {
+            "id": "319806090",
+            "scenario": "NEBx2P",
+            "prob": 0.4166943395998649
+          },
+          {
+            "id": "319806024",
+            "scenario": "NEBx2P",
+            "prob": 0.3437914094995726
+          },
+          {
+            "id": "319806133",
+            "scenario": "NEBx2P",
+            "prob": 0.11986253921864133
+          },
+          {
+            "id": "319806028",
+            "scenario": "NEBx2P",
+            "prob": 0.0409613251607322
+          },
+          {
+            "id": "319806186",
+            "scenario": "NEBx2P",
+            "prob": 0.014070763393015518
+          }
+        ]
+      }
+    }
+  ]
+}

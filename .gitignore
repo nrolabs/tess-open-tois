@@ -1,10 +1,15 @@
 .venv/
 .venv-fpp/
 __pycache__/
-data/
-models/
+# Raw data and caches (MAST downloads, features); only the sample definition is versioned
+/data/*
+!/data/open.json
+!/data/catalogs/
+/data/catalogs/*
+!/data/catalogs/exofop_toi.csv
 *.egg-info/
-reports/
+# Search results are versioned; scratch outputs are not
+/reports/field*
 
 # Paper build products
 paper/*.aux

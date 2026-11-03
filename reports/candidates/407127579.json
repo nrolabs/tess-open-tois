@@ -1,0 +1,83 @@
+{
+  "tic": 407127579,
+  "model_mtime": 1793631571.719551,
+  "code_version": "c5833c125cc5c10c",
+  "threshold": 0.8765867948532104,
+  "events": [
+    {
+      "tic": 407127579,
+      "search": "bls",
+      "snr": 16.435705043699784,
+      "sde": 24.46949163110964,
+      "period_days": 3.5107888463546426,
+      "epoch_bjd": 2460071.2136295065,
+      "duration_hours": 2.5,
+      "bls_depth_ppm": 1042.5613453924557,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 5064.01",
+        "toi": "5064.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "masks": [
+        [
+          7.02441,
+          2461103.39,
+          3.21767
+        ]
+      ],
+      "metrics": {
+        "period_days": 3.5107888463546426,
+        "epoch_bjd": 2460071.2136295065,
+        "duration_hours": 2.5,
+        "depth_ppm": 1222.584933315222,
+        "snr": 16.719677636258265,
+        "transits": 20,
+        "odd_depth_ppm": 1211.1851024857795,
+        "even_depth_ppm": 1239.684679559386,
+        "odd_even_sigma": 0.13550829129668185,
+        "secondary_depth_ppm": 264.988648277519,
+        "secondary_sigma": 3.2160760312609646,
+        "secondary_phase": 0.27037037037037037,
+        "secondary_albedo": 8.460604720089021,
+        "secondary_threshold_sigma": 3.5932885753214374,
+        "brightening_sigma": 3.5883473342634025,
+        "ingress_fraction": 0.34107331367844446,
+        "fitted_duration_hours": 3.890283517551249,
+        "radius_earth": 6.0517324969368715,
+        "a_over_rstar": 6.247792356059136,
+        "density_ratio": 1.489540485299245,
+        "centroid_sigma": 0.21060022469658837,
+        "source_offset_arcsec": 0.9737723154627819,
+        "crowdsap": 0.96733701,
+        "star": {
+          "radius": 1.58641005,
+          "teff": 5860.0,
+          "logg": 4.06254005,
+          "tmag": 11.59389973
+        },
+        "sectors": [
+          65,
+          66,
+          93,
+          101
+        ],
+        "flags": {},
+        "verdict": "pass",
+        "tic": 407127579,
+        "catalog_ephemeris": [
+          3.5107888463546426,
+          2460071.2136295065
+        ],
+        "common_mode_sigma": -0.2716684876573089
+      },
+      "cnn_score": 0.5093018412590027,
+      "cnn_calibrated": 0.65625,
+      "cnn_selected": false,
+      "fpp": null,
+      "tier": "inconclusive"
+    }
+  ]
+}

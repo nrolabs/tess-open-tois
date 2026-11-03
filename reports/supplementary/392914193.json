@@ -1,0 +1,80 @@
+{
+  "tic": 392914193,
+  "events": [
+    {
+      "period_days": 0.8774700353830145,
+      "epoch_bjd": 2460069.285103358,
+      "duration_hours": 1.0,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 6565.01",
+        "toi": "6565.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.41975308641975306,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": 0.5190826844354545,
+        "offset_pixels": 0.12602385216960107,
+        "offset_arcsec": 2.6465008955616227,
+        "sectors": [
+          {
+            "sector": 65,
+            "transits": 29,
+            "difference_snr": 7.693246330610577,
+            "used": true,
+            "dx_pixels": 0.12533396225322857,
+            "dy_pixels": 0.013168493519447821,
+            "dx_err": 0.1254219197767822,
+            "dy_err": 0.12702200814122303
+          },
+          {
+            "sector": 102,
+            "transits": 28,
+            "difference_snr": 4.971903920960733,
+            "used": false
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 0.4816614148691693,
+        "nfpp": 8.613960876946722e-13,
+        "fpp_std": 0.1376901777294915,
+        "nfpp_std": 1.1622426602395472e-13,
+        "sectors_used": [
+          65,
+          102
+        ],
+        "top_scenarios": [
+          {
+            "id": "392914193",
+            "scenario": "TP",
+            "prob": 0.5745630551568007
+          },
+          {
+            "id": "392914193",
+            "scenario": "EBx2P",
+            "prob": 0.13861605448498238
+          },
+          {
+            "id": "392914193",
+            "scenario": "PEBx2P",
+            "prob": 0.10627778552143702
+          },
+          {
+            "id": "392914193",
+            "scenario": "STP",
+            "prob": 0.08907676571307305
+          },
+          {
+            "id": "392914193",
+            "scenario": "PTP",
+            "prob": 0.08626648899494184
+          }
+        ]
+      }
+    }
+  ]
+}

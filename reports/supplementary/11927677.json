@@ -1,0 +1,80 @@
+{
+  "tic": 11927677,
+  "events": [
+    {
+      "period_days": 3.686128898134873,
+      "epoch_bjd": 2460721.786878929,
+      "duration_hours": 4.0,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 6477.01",
+        "toi": "6477.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.41975308641975306,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": 0.4706376654785404,
+        "offset_pixels": 0.10230083302320339,
+        "offset_arcsec": 2.148317493487271,
+        "sectors": [
+          {
+            "sector": 89,
+            "transits": 5,
+            "difference_snr": 0.00034390011694819837,
+            "used": false
+          },
+          {
+            "sector": 99,
+            "transits": 5,
+            "difference_snr": 10.419691220550913,
+            "used": true,
+            "dx_pixels": -0.09162466875377717,
+            "dy_pixels": -0.045501434186209444,
+            "dx_err": 0.10786599640738992,
+            "dy_err": 0.10796500410883562
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 0.22099587284243427,
+        "nfpp": 0.01960834682142087,
+        "fpp_std": 0.135605106981036,
+        "nfpp_std": 0.01568601268513321,
+        "sectors_used": [
+          89,
+          99
+        ],
+        "top_scenarios": [
+          {
+            "id": "11927677",
+            "scenario": "PTP",
+            "prob": 0.33253778153988034
+          },
+          {
+            "id": "11927677",
+            "scenario": "PEB",
+            "prob": 0.31574046372999237
+          },
+          {
+            "id": "11927677",
+            "scenario": "TP",
+            "prob": 0.258420695970177
+          },
+          {
+            "id": "11927677",
+            "scenario": "EB",
+            "prob": 0.06782742472531243
+          },
+          {
+            "id": "11927677",
+            "scenario": "DTP",
+            "prob": 0.010032605731495508
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "tic": 410056850,
+  "model_mtime": 1793631571.719551,
+  "code_version": "c5833c125cc5c10c",
+  "threshold": 0.8765867948532104,
+  "events": [
+    {
+      "tic": 410056850,
+      "search": "bls",
+      "snr": 34.354798241114445,
+      "sde": 38.47993107873886,
+      "period_days": 10.60496611276324,
+      "epoch_bjd": 2461104.2825713335,
+      "duration_hours": 4.0,
+      "bls_depth_ppm": 5696.312375304168,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 7850.01",
+        "toi": "7850.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "masks": [
+        [
+          10.618,
+          2458664.842,
+          4.44
+        ]
+      ],
+      "metrics": {
+        "period_days": 10.60496611276324,
+        "epoch_bjd": 2461104.2825713335,
+        "duration_hours": 4.0,
+        "depth_ppm": 7536.632606341592,
+        "snr": 43.12873123697497,
+        "transits": 8,
+        "odd_depth_ppm": 7677.200461729751,
+        "even_depth_ppm": 7396.064750953433,
+        "odd_even_sigma": 0.6410923653952374,
+        "secondary_depth_ppm": 584.4874563186883,
+        "secondary_sigma": 2.4935254649585477,
+        "secondary_phase": 0.36470588235294116,
+        "secondary_albedo": 21.755161069818165,
+        "secondary_threshold_sigma": 3.761679292508492,
+        "brightening_sigma": 2.758256773199348,
+        "ingress_fraction": 0.14745648341997153,
+        "fitted_duration_hours": 5.229629605501717,
+        "radius_earth": 12.695537101370146,
+        "a_over_rstar": 16.748743299436008,
+        "density_ratio": 1.0158226729147564,
+        "centroid_sigma": 0.22253534277640274,
+        "source_offset_arcsec": 0.7165992564269973,
+        "crowdsap": 0.92059958,
+        "star": {
+          "radius": 1.34040999,
+          "teff": 6543.0,
+          "logg": 4.31392002,
+          "tmag": 12.68470001
+        },
+        "sectors": [
+          101,
+          102,
+          103,
+          104
+        ],
+        "flags": {},
+        "verdict": "pass",
+        "tic": 410056850,
+        "catalog_ephemeris": [
+          10.60496611276324,
+          2461104.2825713335
+        ],
+        "common_mode_sigma": -0.9678372994918151,
+        "pixel_test": {
+          "sigma": 0.4284125561286243,
+          "offset_pixels": 0.06197674585264082,
+          "offset_arcsec": 1.3015116629054573,
+          "sectors": [
+            {
+              "sector": 102,
+              "transits": 2,
+              "difference_snr": 10.205591833075061,
+              "used": true,
+              "dx_pixels": 0.10127346011403926,
+              "dy_pixels": -0.11553671467559301,
+              "dx_err": 0.11881087620230299,
+              "dy_err": 0.11961268286165648
+            },
+            {
+              "sector": 103,
+              "transits": 2,
+              "difference_snr": 9.86805455321629,
+              "used": true,
+              "dx_pixels": -0.2424580605404909,
+              "dy_pixels": -0.02159655408083827,
+              "dx_err": 0.11749408273922707,
+              "dy_err": 0.11772091617200443
+            },
+            {
+              "sector": 104,
+              "transits": 2,
+              "difference_snr": 10.513010616221207,
+              "used": true,
+              "dx_pixels": 0.0710769968031908,
+              "dy_pixels": -0.03229835779621304,
+              "dx_err": 0.12004616090788534,
+              "dy_err": 0.1220260799052622
+            }
+          ]
+        }
+      },
+      "cnn_score": 0.8929226994514465,
+      "cnn_calibrated": 0.9156626506024096,
+      "cnn_selected": true,
+      "fpp": {
+        "fpp": 0.05949334746867899,
+        "nfpp": 1.4401091093852386e-07,
+        "fpp_std": 0.013771709294774908,
+        "nfpp_std": 2.9308670737958425e-08,
+        "sectors_used": [
+          102,
+          103,
+          104
+        ],
+        "top_scenarios": [
+          {
+            "id": "410056850",
+            "scenario": "TP",
+            "prob": 0.7126836311918398
+          },
+          {
+            "id": "410056850",
+            "scenario": "PTP",
+            "prob": 0.2054968504640823
+          },
+          {
+            "id": "410056850",
+            "scenario": "SEB",
+            "prob": 0.055698459032974046
+          },
+          {
+            "id": "410056850",
+            "scenario": "STP",
+            "prob": 0.022851693720509353
+          },
+          {
+            "id": "410056850",
+            "scenario": "DTP",
+            "prob": 0.0032640613337589688
+          }
+        ]
+      },
+      "tier": "candidate: likely planet"
+    }
+  ]
+}

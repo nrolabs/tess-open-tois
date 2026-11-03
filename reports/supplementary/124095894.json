@@ -1,0 +1,76 @@
+{
+  "tic": 124095894,
+  "events": [
+    {
+      "period_days": 1.1257349353117334,
+      "epoch_bjd": 2461102.1088917013,
+      "duration_hours": 0.75,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 7854.01",
+        "toi": "7854.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.41975308641975306,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": null,
+        "offset_pixels": null,
+        "offset_arcsec": null,
+        "sectors": [
+          {
+            "sector": 101,
+            "transits": 22,
+            "difference_snr": 4.4126544815693665,
+            "used": false
+          },
+          {
+            "sector": 102,
+            "transits": 21,
+            "difference_snr": 3.8424332477682586,
+            "used": false
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 0.9090909090909091,
+        "nfpp": 0.5454545454545454,
+        "fpp_std": 0.0,
+        "nfpp_std": 0.0,
+        "sectors_used": [
+          101,
+          102
+        ],
+        "top_scenarios": [
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.030303030303030304
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.030303030303030304
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.030303030303030304
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.030303030303030304
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.030303030303030304
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "tic": 48768158,
+  "events": [
+    {
+      "period_days": 2.3371548169166436,
+      "epoch_bjd": 2460015.596265625,
+      "duration_hours": 2.0,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 2993.01",
+        "toi": "2993.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": false
+      },
+      "cnn_calibrated": 0.8497409326424871,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": 0.44060344529116247,
+        "offset_pixels": 0.06935966607934511,
+        "offset_arcsec": 1.4565529876662473,
+        "sectors": [
+          {
+            "sector": 90,
+            "transits": 10,
+            "difference_snr": 9.42418106231642,
+            "used": true,
+            "dx_pixels": 0.06534815823343543,
+            "dy_pixels": 0.08554151685723532,
+            "dx_err": 0.11834502830663433,
+            "dy_err": 0.11661136945052215
+          },
+          {
+            "sector": 99,
+            "transits": 8,
+            "difference_snr": 6.648062888945569,
+            "used": true,
+            "dx_pixels": -0.040762605997880286,
+            "dy_pixels": -0.07692741358160227,
+            "dx_err": 0.16065782220523303,
+            "dy_err": 0.1545222025666823
+          },
+          {
+            "sector": 100,
+            "transits": 12,
+            "difference_snr": 8.3974431853535,
+            "used": true,
+            "dx_pixels": 0.032766121783539326,
+            "dy_pixels": 0.13363249486338002,
+            "dx_err": 0.1314041377577528,
+            "dy_err": 0.1304567238744248
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 0.8000000000000002,
+        "nfpp": 0.0,
+        "fpp_std": 1.1102230246251565e-16,
+        "nfpp_std": 0.0,
+        "sectors_used": [
+          63
+        ],
+        "top_scenarios": [
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.06666666666666667
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.06666666666666667
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.06666666666666667
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.06666666666666667
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.06666666666666667
+          }
+        ]
+      }
+    }
+  ]
+}

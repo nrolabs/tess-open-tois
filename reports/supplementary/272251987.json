@@ -1,0 +1,80 @@
+{
+  "tic": 272251987,
+  "events": [
+    {
+      "period_days": 3.3192323873928142,
+      "epoch_bjd": 2461075.1928520366,
+      "duration_hours": 4.0,
+      "known": {
+        "source": "TCE",
+        "name": "TCE s0100-s0100 272251987-01",
+        "toi": null,
+        "disposition": null,
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.1818181818181818,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": 0.18920159850434412,
+        "offset_pixels": 0.09235487040561918,
+        "offset_arcsec": 1.9394522785180028,
+        "sectors": [
+          {
+            "sector": 100,
+            "transits": 8,
+            "difference_snr": 4.505432646827426,
+            "used": false
+          },
+          {
+            "sector": 101,
+            "transits": 8,
+            "difference_snr": 5.418038443188,
+            "used": true,
+            "dx_pixels": -0.025537548788783226,
+            "dy_pixels": -0.0887539052070343,
+            "dx_err": 0.16873738054148607,
+            "dy_err": 0.1614278601041066
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 0.9909581887408692,
+        "nfpp": 0.9793266042053653,
+        "fpp_std": 0.0009322050786536006,
+        "nfpp_std": 0.002686460375408602,
+        "sectors_used": [
+          100,
+          101
+        ],
+        "top_scenarios": [
+          {
+            "id": "272252038",
+            "scenario": "NEBx2P",
+            "prob": 0.31700734715705087
+          },
+          {
+            "id": "981570466",
+            "scenario": "NEBx2P",
+            "prob": 0.21247336895354133
+          },
+          {
+            "id": "272252042",
+            "scenario": "NEBx2P",
+            "prob": 0.12742202292832522
+          },
+          {
+            "id": "981570529",
+            "scenario": "NEBx2P",
+            "prob": 0.12657084484465975
+          },
+          {
+            "id": "272251972",
+            "scenario": "NEBx2P",
+            "prob": 0.08052612391735219
+          }
+        ]
+      }
+    }
+  ]
+}

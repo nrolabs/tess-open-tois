@@ -1,0 +1,108 @@
+{
+  "tic": 292889298,
+  "events": [
+    {
+      "period_days": 2.2532175846624103,
+      "epoch_bjd": 2460070.999564044,
+      "duration_hours": 3.0,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 3463.01",
+        "toi": "3463.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": false
+      },
+      "cnn_calibrated": 0.7468354430379747,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "error": "RuntimeError: Download size mismatch https://mast.stsci.edu/api/v0.1/Download/file/?uri=mast:TESS/product/tess2026033082000-s0100-0000000292889298-0302-s_tp.fits"
+      },
+      "fpp": {
+        "fpp": 0.9444444444444443,
+        "nfpp": 0.722222222222222,
+        "fpp_std": 1.1102230246251565e-16,
+        "nfpp_std": 0.0,
+        "sectors_used": [
+          65
+        ],
+        "top_scenarios": [
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.018518518518518517
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.018518518518518517
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.018518518518518517
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.018518518518518517
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.018518518518518517
+          }
+        ]
+      }
+    },
+    {
+      "period_days": 0.5014148644879803,
+      "epoch_bjd": 2460069.0558171254,
+      "duration_hours": 1.0,
+      "known": null,
+      "cnn_calibrated": 0.3472222222222222,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "error": "RuntimeError: Download size mismatch https://mast.stsci.edu/api/v0.1/Download/file/?uri=mast:TESS/product/tess2026033082000-s0100-0000000292889298-0302-s_tp.fits"
+      },
+      "fpp": {
+        "fpp": 0.9729729729729729,
+        "nfpp": 0.8648648648648652,
+        "fpp_std": 0.0,
+        "nfpp_std": 0.0,
+        "sectors_used": [
+          100,
+          101,
+          102
+        ],
+        "top_scenarios": [
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.00900900900900901
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.00900900900900901
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.00900900900900901
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.00900900900900901
+          },
+          {
+            "id": "0",
+            "scenario": "",
+            "prob": 0.00900900900900901
+          }
+        ]
+      }
+    }
+  ]
+}

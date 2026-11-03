@@ -1,0 +1,76 @@
+{
+  "tic": 361344753,
+  "events": [
+    {
+      "period_days": 7.515724845966713,
+      "epoch_bjd": 2460718.2067947774,
+      "duration_hours": 2.5,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 6595.01",
+        "toi": "6595.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.8879310344827587,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": null,
+        "offset_pixels": null,
+        "offset_arcsec": null,
+        "sectors": [
+          {
+            "sector": 89,
+            "transits": 1,
+            "difference_snr": 3.3980058264467314,
+            "used": false
+          },
+          {
+            "sector": 90,
+            "transits": 4,
+            "difference_snr": 3.3247826514881083,
+            "used": false
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 0.07871240065949396,
+        "nfpp": 0.05010060567340557,
+        "fpp_std": 0.004213895883267627,
+        "nfpp_std": 0.0029773617015766206,
+        "sectors_used": [
+          89,
+          90
+        ],
+        "top_scenarios": [
+          {
+            "id": "361344753",
+            "scenario": "TP",
+            "prob": 0.7321517892064671
+          },
+          {
+            "id": "361344753",
+            "scenario": "PTP",
+            "prob": 0.1533531141129464
+          },
+          {
+            "id": "361344753",
+            "scenario": "DTP",
+            "prob": 0.04159780326146639
+          },
+          {
+            "id": "361344753",
+            "scenario": "STP",
+            "prob": 0.021323054415836862
+          },
+          {
+            "id": "361344768",
+            "scenario": "NTP",
+            "prob": 0.012747550655809788
+          }
+        ]
+      }
+    }
+  ]
+}

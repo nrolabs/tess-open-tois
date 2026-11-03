@@ -1,0 +1,86 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{graphicx,booktabs,amsmath}
+\newcommand{\arcsec}{$^{\prime\prime}$}
+\title{TESS planet candidate around TIC 89062142}
+\author{Isak Paulo de Andrade Ruas \\ NROLABS}
+\date{\today}
+\begin{document}
+\maketitle
+
+\section*{Summary}
+Signal found by the bls search of a public-data TESS pipeline
+(SPOC 120\,s PDCSAP light curves, sectors 105, 106, 107).
+Final tier: \textbf{candidate: likely planet}.
+Catalogue cross-match (TOIs, CTOIs, published planets, SPOC TCEs, TESS eclipsing binaries):
+\textbf{TOI 4674.01} (TOI).
+CNN score (calibrated): 0.916.
+TRICERATOPS (10 Monte Carlo runs, mean $\pm$ error of the mean):
+FPP $= 0.335 \pm 0.0052$,
+NFPP $= 7.2e-09$.
+
+\section*{Host star (TIC v8)}
+\begin{tabular}{ll}\toprule
+RA, Dec (deg) & 54.456978, -24.612603 \\
+TESS magnitude & 13.2 \\
+Radius ($R_\odot$) & 1.53 $\pm$ -- \\
+$T_{\rm eff}$ (K) & 5595 $\pm$ 122 \\
+Density ($\rho_\odot$) & 0.278 $\pm$ -- \\
+Distance (pc) & 861 \\\bottomrule
+\end{tabular}
+
+\section*{Transit fit}
+Limb-darkened model (quadratic law, Kipping $q_1,q_2$; GPU float64, 1024 annuli, 1024x4096 tables, 15x supersampling), emcee with 48 walkers,
+8000 steps (748 burn-in), run until the chain exceeded 50 autocorrelation times.
+Medians and 68\% intervals.
+
+\begin{tabular}{lc}\toprule
+Mid-transit time $T_0$ (BJD$_{\rm TDB}$) & $2461240.9832^{+0.0010}_{-0.0010}$ \\
+Period $P$ (days) & $4.24307^{+0.00017}_{-0.00017}$ \\
+Radius ratio $R_p/R_\star$ & $0.0807^{+0.0022}_{-0.0022}$ \\
+Impact parameter $b$ & $0.40^{+0.21}_{-0.25}$ \\
+Stellar density $\rho_\star$ (g cm$^{-3}$) & $0.63^{+0.16}_{-0.21}$ \\
+Limb darkening $q_1$ & $0.22^{+0.28}_{-0.14}$ \\
+Limb darkening $q_2$ & $0.26^{+0.33}_{-0.18}$ \\
+Depth (ppm) & $7211^{+257}_{-246}$ \\
+Duration $T_{14}$ (hours) & $3.87^{+0.10}_{-0.09}$ \\
+$a/R_\star$ & $8.4^{+0.6}_{-1.1}$ \\
+Inclination (deg) & $87.3^{+1.7}_{-2.0}$ \\
+Planet radius ($R_\oplus$) & $13.5^{+1.0}_{-1.0}$ \\
+Semi-major axis (au) & $0.0592^{+0.0069}_{-0.0076}$ \\
+Equilibrium temperature (K, $A=0$) & $1365^{+94}_{-59}$ \\
+Insolation ($S_\oplus$) & $578^{+177}_{-93}$ \\
+\bottomrule\end{tabular}
+
+\section*{Vetting}
+\begin{tabular}{lccc}\toprule
+Test & Value & Pass condition & Result \\\midrule
+Transit SNR (correlated noise) & 29.2 & $\ge 7.1$ & pass \\
+Transits observed & 11 & $\ge 2$ (periodic) & pass \\
+Odd/even depth difference ($\sigma$) & 0.886 & $\le 4$ & pass \\
+Secondary eclipse ($\sigma$) & 2.5 & $\le 3.6$ & pass \\
+Ingress fraction (V shape) & 0.0828 & $\le 0.4$ & pass \\
+Planet radius ($R_\oplus$) & 14 & $\le 25$ & pass \\
+Centroid source offset (arcsec) & 0.865 & 4$\sigma$ and $>$21\arcsec & pass \\
+Difference image offset (arcsec) & 1.87 & 4$\sigma$ and $>$10.5\arcsec & pass \\
+Difference image significance ($\sigma$) & 0.47 & -- & -- \\
+CCD common mode ($\sigma$) & -0.0186 & $\le 4$ & pass \\
+Crowding (CROWDSAP) & 0.96 & $\ge 0.8$ & pass \\
+Stellar density ratio (max/TIC) & 2.35 & $\ge 0.2$ & pass \\
+\bottomrule\end{tabular}
+
+\section*{Caveats}
+\begin{itemize}
+\item This is a candidate with statistical evidence, not a confirmed planet: confirmation needs high-resolution imaging, reconnaissance spectroscopy and radial velocities.
+\item TRICERATOPS was run without a high-resolution imaging contrast curve, so close bound companions are not excluded.
+\item The MCMC converged (chain longer than 50 autocorrelation times, stable estimate) (acceptance 0.18, 8000 steps, about 2318 independent samples); errors are scaled by the time-averaging factor $\beta = 1.15$ for correlated noise.
+\item Stellar radius and effective temperature come from TIC v8; if the TIC gives no error, 7\% (radius) and 150 K were assumed.
+\end{itemize}
+
+\begin{figure}[h!]\centering\includegraphics[width=1\textwidth]{lightcurve.pdf}\caption{Detrended SPOC PDCSAP light curve (transit-protected biweight).}\end{figure}
+\begin{figure}[h!]\centering\includegraphics[width=.8\textwidth]{folded.pdf}\caption{Phase-folded transit with the posterior median limb-darkened model.}\end{figure}
+\begin{figure}[h!]\centering\includegraphics[width=.7\textwidth]{odd_even.pdf}\caption{Odd and even transits, binned to 10 minutes.}\end{figure}
+\begin{figure}[h!]\centering\includegraphics[width=.7\textwidth]{secondary.pdf}\caption{Phase curve; the shaded band is the secondary eclipse window for a circular orbit.}\end{figure}
+\begin{figure}[h!]\centering\includegraphics[width=.85\textwidth]{difference_image.pdf}\caption{SPOC target pixel file: out-of-transit image and difference image. White cross: target catalogue position; red plus: fitted source.}\end{figure}
+\begin{figure}[h!]\centering\includegraphics[width=.9\textwidth]{posterior.pdf}\caption{Posterior distributions of the fitted parameters.}\end{figure}
+\end{document}

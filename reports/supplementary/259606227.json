@@ -1,0 +1,110 @@
+{
+  "tic": 259606227,
+  "events": [
+    {
+      "period_days": 10.12863358512425,
+      "epoch_bjd": 2461052.752560075,
+      "duration_hours": 6.0,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 6555.01",
+        "toi": "6555.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.8497409326424871,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "error": "RuntimeError: Download size mismatch https://mast.stsci.edu/api/v0.1/Download/file/?uri=mast:TESS/product/tess2026005125623-s0099-0000000259606227-0300-s_tp.fits"
+      },
+      "fpp": {
+        "fpp": 0.009071081275539497,
+        "nfpp": 0.0024764726190396736,
+        "fpp_std": 0.00116967553666145,
+        "nfpp_std": 8.82502701355248e-05,
+        "sectors_used": [
+          99,
+          100,
+          102
+        ],
+        "top_scenarios": [
+          {
+            "id": "259606227",
+            "scenario": "TP",
+            "prob": 0.7777536332900984
+          },
+          {
+            "id": "259606227",
+            "scenario": "PTP",
+            "prob": 0.16378651062396843
+          },
+          {
+            "id": "259606227",
+            "scenario": "DTP",
+            "prob": 0.050859699776196886
+          },
+          {
+            "id": "259606227",
+            "scenario": "STP",
+            "prob": 0.004583646624146716
+          },
+          {
+            "id": "259606203",
+            "scenario": "NEB",
+            "prob": 0.0023495006779059436
+          }
+        ]
+      }
+    },
+    {
+      "period_days": 1.064353350578973,
+      "epoch_bjd": 2461046.5423491895,
+      "duration_hours": 2.5,
+      "known": null,
+      "cnn_calibrated": 0.08333333333333333,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "error": "RuntimeError: Download size mismatch https://mast.stsci.edu/api/v0.1/Download/file/?uri=mast:TESS/product/tess2026005125623-s0099-0000000259606227-0300-s_tp.fits"
+      },
+      "fpp": {
+        "fpp": 0.06569882293697644,
+        "nfpp": 0.06076604709970159,
+        "fpp_std": 0.009082293717460072,
+        "nfpp_std": 0.008505080066609274,
+        "sectors_used": [
+          99,
+          100,
+          102
+        ],
+        "top_scenarios": [
+          {
+            "id": "259606227",
+            "scenario": "TP",
+            "prob": 0.6996550715290287
+          },
+          {
+            "id": "259606227",
+            "scenario": "PTP",
+            "prob": 0.1709341531389051
+          },
+          {
+            "id": "259606227",
+            "scenario": "DTP",
+            "prob": 0.051750265260154
+          },
+          {
+            "id": "259606203",
+            "scenario": "NEBx2P",
+            "prob": 0.03529887962417232
+          },
+          {
+            "id": "259606233",
+            "scenario": "NEBx2P",
+            "prob": 0.02799237479255872
+          }
+        ]
+      }
+    }
+  ]
+}

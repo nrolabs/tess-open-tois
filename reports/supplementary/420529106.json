@@ -1,0 +1,110 @@
+{
+  "tic": 420529106,
+  "events": [
+    {
+      "period_days": 9.530724450045708,
+      "epoch_bjd": 2461053.1378934984,
+      "duration_hours": 2.5,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 6558.01",
+        "toi": "6558.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.45454545454545453,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "error": "RuntimeError: Download size mismatch https://mast.stsci.edu/api/v0.1/Download/file/?uri=mast:TESS/product/tess2026005125623-s0099-0000000420529106-0300-s_tp.fits"
+      },
+      "fpp": {
+        "fpp": 0.01870381113816692,
+        "nfpp": 0.004134177184191845,
+        "fpp_std": 0.001000990977369479,
+        "nfpp_std": 9.954753841638046e-05,
+        "sectors_used": [
+          99,
+          101,
+          102
+        ],
+        "top_scenarios": [
+          {
+            "id": "420529106",
+            "scenario": "TP",
+            "prob": 0.8030556221042964
+          },
+          {
+            "id": "420529106",
+            "scenario": "PTP",
+            "prob": 0.1410327559001444
+          },
+          {
+            "id": "420529106",
+            "scenario": "DTP",
+            "prob": 0.038615985424129126
+          },
+          {
+            "id": "420529106",
+            "scenario": "STP",
+            "prob": 0.012186538268647332
+          },
+          {
+            "id": "420529037",
+            "scenario": "NEB",
+            "prob": 0.002047864423261816
+          }
+        ]
+      }
+    },
+    {
+      "period_days": 21.960872307451655,
+      "epoch_bjd": 2461049.716552263,
+      "duration_hours": 3.0,
+      "known": null,
+      "cnn_calibrated": 0.8497409326424871,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "error": "RuntimeError: Download size mismatch https://mast.stsci.edu/api/v0.1/Download/file/?uri=mast:TESS/product/tess2026005125623-s0099-0000000420529106-0300-s_tp.fits"
+      },
+      "fpp": {
+        "fpp": 0.03435580865712843,
+        "nfpp": 0.012625813919952928,
+        "fpp_std": 0.0014205647046787184,
+        "nfpp_std": 0.0006522402207200779,
+        "sectors_used": [
+          99,
+          101,
+          102
+        ],
+        "top_scenarios": [
+          {
+            "id": "420529106",
+            "scenario": "TP",
+            "prob": 0.779827626871041
+          },
+          {
+            "id": "420529106",
+            "scenario": "PTP",
+            "prob": 0.14815236020188838
+          },
+          {
+            "id": "420529106",
+            "scenario": "DTP",
+            "prob": 0.037749493098555006
+          },
+          {
+            "id": "420529106",
+            "scenario": "STP",
+            "prob": 0.020619295580481176
+          },
+          {
+            "id": "420529037",
+            "scenario": "NEB",
+            "prob": 0.00572465835136502
+          }
+        ]
+      }
+    }
+  ]
+}

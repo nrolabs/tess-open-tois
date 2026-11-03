@@ -1,0 +1,80 @@
+{
+  "tic": 415143674,
+  "events": [
+    {
+      "period_days": 6.016690591882155,
+      "epoch_bjd": 2459965.261398091,
+      "duration_hours": 6.0,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 4228.01",
+        "toi": "4228.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.46236559139784944,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": 0.17116124654934242,
+        "offset_pixels": 0.0614846912852806,
+        "offset_arcsec": 1.2911785169908925,
+        "sectors": [
+          {
+            "sector": 61,
+            "transits": 4,
+            "difference_snr": 11.34110027857865,
+            "used": true,
+            "dx_pixels": -0.040781155447127126,
+            "dy_pixels": 0.046013743847284516,
+            "dx_err": 0.11400090836490065,
+            "dy_err": 0.11356322371939769
+          },
+          {
+            "sector": 88,
+            "transits": 5,
+            "difference_snr": 0.21887989799606253,
+            "used": false
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 0.35427185060027994,
+        "nfpp": 0.12554677658700528,
+        "fpp_std": 0.03368700564941502,
+        "nfpp_std": 0.01078798136638517,
+        "sectors_used": [
+          61,
+          88
+        ],
+        "top_scenarios": [
+          {
+            "id": "415143674",
+            "scenario": "TP",
+            "prob": 0.53702956004825
+          },
+          {
+            "id": "415143674",
+            "scenario": "PTP",
+            "prob": 0.1227907686844551
+          },
+          {
+            "id": "415143674",
+            "scenario": "PEB",
+            "prob": 0.08900102998148572
+          },
+          {
+            "id": "415143674",
+            "scenario": "EB",
+            "prob": 0.08839996653195498
+          },
+          {
+            "id": "415143675",
+            "scenario": "NEB",
+            "prob": 0.08527224657670342
+          }
+        ]
+      }
+    }
+  ]
+}

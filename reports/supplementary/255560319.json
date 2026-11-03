@@ -1,0 +1,70 @@
+{
+  "tic": 255560319,
+  "events": [
+    {
+      "period_days": 92.6535722693189,
+      "epoch_bjd": 2458394.205798034,
+      "duration_hours": 1.5,
+      "known": null,
+      "cnn_calibrated": 0.3472222222222222,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": null,
+        "offset_pixels": null,
+        "offset_arcsec": null,
+        "sectors": [
+          {
+            "sector": 88,
+            "transits": 1,
+            "difference_snr": 0.0005232170196284119,
+            "used": false
+          },
+          {
+            "sector": 95,
+            "transits": 1,
+            "difference_snr": 0.041626821920401416,
+            "used": false
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 0.9999716196601985,
+        "nfpp": 0.0,
+        "fpp_std": 1.55672828356571e-05,
+        "nfpp_std": 0.0,
+        "sectors_used": [
+          61,
+          88,
+          98
+        ],
+        "top_scenarios": [
+          {
+            "id": "255560319",
+            "scenario": "STP",
+            "prob": 0.4999869353058752
+          },
+          {
+            "id": "255560319",
+            "scenario": "SEB",
+            "prob": 0.420708102477741
+          },
+          {
+            "id": "255560319",
+            "scenario": "SEBx2P",
+            "prob": 0.05248758033387162
+          },
+          {
+            "id": "255560319",
+            "scenario": "BEB",
+            "prob": 0.02195033410222638
+          },
+          {
+            "id": "255560319",
+            "scenario": "BEBx2P",
+            "prob": 0.002590148732717503
+          }
+        ]
+      }
+    }
+  ]
+}

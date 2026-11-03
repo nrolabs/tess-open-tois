@@ -1,0 +1,80 @@
+{
+  "tic": 72123144,
+  "events": [
+    {
+      "period_days": 7.083785941490349,
+      "epoch_bjd": 2461078.30794903,
+      "duration_hours": 4.0,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 6590.01",
+        "toi": "6590.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.42857142857142855,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": 1.2551172733390434,
+        "offset_pixels": 0.2970333067366768,
+        "offset_arcsec": 6.237699441470213,
+        "sectors": [
+          {
+            "sector": 100,
+            "transits": 4,
+            "difference_snr": 6.362218275928755,
+            "used": true,
+            "dx_pixels": -0.2426180022589124,
+            "dy_pixels": 0.17136303653594354,
+            "dx_err": 0.16867404511430456,
+            "dy_err": 0.16662142803629978
+          },
+          {
+            "sector": 101,
+            "transits": 3,
+            "difference_snr": 2.113786684443776,
+            "used": false
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 0.5426120085437686,
+        "nfpp": 0.4791392272500355,
+        "fpp_std": 0.007377862607955863,
+        "nfpp_std": 0.012679426345663646,
+        "sectors_used": [
+          100,
+          101
+        ],
+        "top_scenarios": [
+          {
+            "id": "72123144",
+            "scenario": "TP",
+            "prob": 0.332837278501986
+          },
+          {
+            "id": "72123142",
+            "scenario": "NTP",
+            "prob": 0.3147168246689473
+          },
+          {
+            "id": "72123144",
+            "scenario": "PTP",
+            "prob": 0.1130129953523131
+          },
+          {
+            "id": "72123157",
+            "scenario": "NEB",
+            "prob": 0.08599270821311704
+          },
+          {
+            "id": "72123142",
+            "scenario": "NEB",
+            "prob": 0.0603647550715012
+          }
+        ]
+      }
+    }
+  ]
+}

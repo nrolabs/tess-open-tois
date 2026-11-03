@@ -1,0 +1,74 @@
+{
+  "tic": 94483093,
+  "model_mtime": 1793631571.719551,
+  "code_version": "c5833c125cc5c10c",
+  "threshold": 0.8765867948532104,
+  "events": [
+    {
+      "tic": 94483093,
+      "search": "bls",
+      "snr": 11.126136159828558,
+      "sde": 9.562326160264169,
+      "period_days": 5.230862188972808,
+      "epoch_bjd": 2461156.2398392684,
+      "duration_hours": 2.5,
+      "bls_depth_ppm": 879.7971631528451,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 6554.01",
+        "toi": "6554.01",
+        "disposition": "PC",
+        "period_ratio": 2,
+        "phase_checked": true
+      },
+      "masks": [],
+      "metrics": {
+        "period_days": 5.230862188972808,
+        "epoch_bjd": 2461156.2398392684,
+        "duration_hours": 2.5,
+        "depth_ppm": 1100.0490726356775,
+        "snr": 12.584592428254155,
+        "transits": 4,
+        "odd_depth_ppm": 1029.6940807776002,
+        "even_depth_ppm": 1123.919516301811,
+        "odd_even_sigma": null,
+        "secondary_depth_ppm": 314.7340555492076,
+        "secondary_sigma": 2.8822279149461627,
+        "secondary_phase": 0.19154228855721392,
+        "secondary_albedo": 21.44667122401324,
+        "secondary_threshold_sigma": 3.7040294681343804,
+        "brightening_sigma": 3.450509173354106,
+        "ingress_fraction": 0.3470013174615155,
+        "fitted_duration_hours": 3.543330737956957,
+        "radius_earth": 5.299935065304143,
+        "a_over_rstar": 8.657930748161943,
+        "density_ratio": 2.4374634191170848,
+        "centroid_sigma": 1.1284335769332932,
+        "source_offset_arcsec": 8.610186065963653,
+        "crowdsap": 0.88276017,
+        "star": {
+          "radius": 1.46466994,
+          "teff": 5650.0,
+          "logg": 4.10658979,
+          "tmag": 10.36999989
+        },
+        "sectors": [
+          103
+        ],
+        "flags": {},
+        "verdict": "pass",
+        "tic": 94483093,
+        "catalog_ephemeris": [
+          5.230862188972808,
+          2461156.2398392684
+        ],
+        "common_mode_sigma": null
+      },
+      "cnn_score": 0.40996333956718445,
+      "cnn_calibrated": 0.46236559139784944,
+      "cnn_selected": false,
+      "fpp": null,
+      "tier": "inconclusive"
+    }
+  ]
+}

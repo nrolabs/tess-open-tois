@@ -1,0 +1,16 @@
+\begin{deluxetable}{lc}
+\tablecaption{Cross-validated performance of the classifier.\label{tab:cnn}}
+\tablehead{\colhead{Quantity} & \colhead{Value}}
+\startdata
+Labelled TOIs (stars) & 2277 (2134) \\
+Positives (CP/KP) & 1349 \\
+Average precision & 0.932 \\
+Average precision, per fold & 0.933 $\pm$ 0.015 \\
+ROC AUC & 0.919 \\
+Precision at threshold & 0.944 (0.924--0.958) \\
+Recall at threshold & 0.508 \\
+Confusion (TP, FP, FN, TN) & 685, 41, 664, 887 \\
+\enddata
+\tablecomments{Out-of-fold scores of five models, folds grouped by star; fold-specific validation thresholds target 95\% precision.
+The precision interval is the Wilson 95\% interval.}
+\end{deluxetable}

@@ -1,0 +1,234 @@
+{
+  "tic": 270471727,
+  "model_mtime": 1793631571.719551,
+  "code_version": "c5833c125cc5c10c",
+  "threshold": 0.8765867948532104,
+  "events": [
+    {
+      "tic": 270471727,
+      "search": "bls",
+      "snr": 10.738385185100974,
+      "sde": 17.052112921271068,
+      "period_days": 10.45641546835696,
+      "epoch_bjd": 2460671.962168843,
+      "duration_hours": 3.0,
+      "bls_depth_ppm": 537.9820279819021,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 7639.01",
+        "toi": "7639.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "masks": [],
+      "metrics": {
+        "period_days": 10.45641546835696,
+        "epoch_bjd": 2460671.962168843,
+        "duration_hours": 3.0,
+        "depth_ppm": 661.8143250071569,
+        "snr": 11.701628175681412,
+        "transits": 16,
+        "odd_depth_ppm": 593.4171694571241,
+        "even_depth_ppm": 730.801111208483,
+        "odd_even_sigma": 0.9758275514818473,
+        "secondary_depth_ppm": 223.64338092050332,
+        "secondary_sigma": 2.745531407345218,
+        "secondary_phase": 0.10149253731343283,
+        "secondary_albedo": 128.30122395697177,
+        "secondary_threshold_sigma": 3.8380187612926675,
+        "brightening_sigma": 3.558681145211625,
+        "ingress_fraction": 0.0561223762984265,
+        "fitted_duration_hours": 3.4499995024165546,
+        "radius_earth": 2.7985149315253715,
+        "a_over_rstar": 19.485226425203205,
+        "density_ratio": 1.8107267166562282,
+        "centroid_sigma": 1.3528188276445088,
+        "source_offset_arcsec": 5.3117582537764445,
+        "crowdsap": 0.97462267,
+        "star": {
+          "radius": 0.997091,
+          "teff": 5241.29980469,
+          "logg": 4.39483976,
+          "tmag": 11.19320011
+        },
+        "sectors": [
+          87,
+          88,
+          89,
+          90,
+          93,
+          94,
+          95
+        ],
+        "flags": {
+          "systematic": "warn"
+        },
+        "verdict": "pass",
+        "tic": 270471727,
+        "catalog_ephemeris": [
+          10.45641546835696,
+          2460671.962168843
+        ],
+        "common_mode_sigma": 3.7045511498368144,
+        "pixel_test": {
+          "sigma": null,
+          "offset_pixels": null,
+          "offset_arcsec": null,
+          "sectors": [
+            {
+              "sector": 93,
+              "transits": 2,
+              "difference_snr": 0.9848594229703224,
+              "used": false
+            },
+            {
+              "sector": 94,
+              "transits": 3,
+              "difference_snr": 0.00043339483037898533,
+              "used": false
+            },
+            {
+              "sector": 95,
+              "transits": 2,
+              "difference_snr": 2.2641096872582986,
+              "used": false
+            }
+          ]
+        }
+      },
+      "cnn_score": 0.8886514902114868,
+      "cnn_calibrated": 0.9156626506024096,
+      "cnn_selected": true,
+      "fpp": {
+        "fpp": 0.009269931480444563,
+        "nfpp": 0.0013236146645674912,
+        "fpp_std": 0.0007577535788771849,
+        "nfpp_std": 3.791735591541944e-05,
+        "sectors_used": [
+          93,
+          94,
+          95
+        ],
+        "top_scenarios": [
+          {
+            "id": "270471727",
+            "scenario": "TP",
+            "prob": 0.8148065356616293
+          },
+          {
+            "id": "270471727",
+            "scenario": "PTP",
+            "prob": 0.17288173971850287
+          },
+          {
+            "id": "270471727",
+            "scenario": "STP",
+            "prob": 0.007583012794898246
+          },
+          {
+            "id": "270471727",
+            "scenario": "DTP",
+            "prob": 0.003339871747556825
+          },
+          {
+            "id": "270471730",
+            "scenario": "NEB",
+            "prob": 0.0009026766488941217
+          }
+        ]
+      },
+      "tier": "inconclusive"
+    },
+    {
+      "tic": 270471727,
+      "search": "single",
+      "snr": 10.136071491283102,
+      "epoch_bjd": 2460704.4756944445,
+      "duration_hours": 9.6,
+      "depth_ppm": 1220.7586511615361,
+      "sector": 88,
+      "period_days": null,
+      "periods": {
+        "min_period_days": 40.92499361172646,
+        "allowed_fraction_below_baseline": 0.12639724849527084,
+        "density_period_days": 121.12550278197871
+      },
+      "known": null,
+      "masks": [
+        [
+          10.45641546835696,
+          2460671.962168843,
+          3.0
+        ],
+        [
+          10.4562977,
+          2460755.615687,
+          3.3634093
+        ],
+        [
+          10.45623256647,
+          2459239.45126584,
+          3.516496
+        ],
+        [
+          10.4564,
+          2460671.96,
+          3.69348
+        ]
+      ],
+      "metrics": {
+        "period_days": 600.8061072975397,
+        "epoch_bjd": 2460704.4756944445,
+        "duration_hours": 9.6,
+        "depth_ppm": 2475.5892332383733,
+        "snr": 14.138283746056851,
+        "transits": 1,
+        "odd_depth_ppm": null,
+        "even_depth_ppm": 2475.5892332383733,
+        "odd_even_sigma": null,
+        "secondary_depth_ppm": 1120.7815238370185,
+        "secondary_sigma": 3.927988782853423,
+        "secondary_phase": 0.0069900973620704,
+        "secondary_albedo": 38111.43502968207,
+        "secondary_threshold_sigma": 3.6951231687096318,
+        "brightening_sigma": 2.988577941951322,
+        "ingress_fraction": 0.36727474816718,
+        "fitted_duration_hours": 16.27422037509839,
+        "radius_earth": 5.4125115909673776,
+        "a_over_rstar": 290.13923526319917,
+        "density_ratio": 1.0625059703124362,
+        "centroid_sigma": 1.6834905841295749,
+        "source_offset_arcsec": 63.51531997352272,
+        "crowdsap": 0.97483605,
+        "star": {
+          "radius": 0.997091,
+          "teff": 5241.29980469,
+          "logg": 4.39483976,
+          "tmag": 11.19320011
+        },
+        "sectors": [
+          88
+        ],
+        "flags": {
+          "below_noise_ceiling": "fail",
+          "edge": "fail"
+        },
+        "verdict": "fail",
+        "tic": 270471727,
+        "catalog_ephemeris": [
+          600.8061072975397,
+          2460704.4756944445
+        ],
+        "noise_ceiling_snr": 12.38546561803942,
+        "edge_distance_days": 0.20241410611197352,
+        "asymmetry_sigma": 0.24406572674439872,
+        "asymmetry_fraction": 0.10173250234524069,
+        "common_mode_sigma": 0.2131582414854911
+      },
+      "fpp_period_days": 121.12550278197871,
+      "fpp": null,
+      "tier": "rejected: vetting [single]"
+    }
+  ]
+}

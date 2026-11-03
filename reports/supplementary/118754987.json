@@ -1,0 +1,80 @@
+{
+  "tic": 118754987,
+  "events": [
+    {
+      "period_days": 7.842029150977758,
+      "epoch_bjd": 2460725.898164912,
+      "duration_hours": 4.0,
+      "known": {
+        "source": "TOI",
+        "name": "TOI 6490.01",
+        "toi": "6490.01",
+        "disposition": "PC",
+        "period_ratio": 1,
+        "phase_checked": true
+      },
+      "cnn_calibrated": 0.7468354430379747,
+      "tier": "inconclusive",
+      "pixel_test": {
+        "sigma": 1.0263455383222906,
+        "offset_pixels": 0.2527827907963413,
+        "offset_arcsec": 5.3084386067231675,
+        "sectors": [
+          {
+            "sector": 89,
+            "transits": 3,
+            "difference_snr": 4.582464424561824,
+            "used": false
+          },
+          {
+            "sector": 99,
+            "transits": 3,
+            "difference_snr": 6.587597339048101,
+            "used": true,
+            "dx_pixels": -0.21690286763855582,
+            "dy_pixels": -0.12981635233266253,
+            "dx_err": 0.1609615964772833,
+            "dy_err": 0.1733519875872729
+          }
+        ]
+      },
+      "fpp": {
+        "fpp": 0.06180346450135732,
+        "nfpp": 6.380798508073246e-07,
+        "fpp_std": 0.007505711583365035,
+        "nfpp_std": 1.2871417188501825e-07,
+        "sectors_used": [
+          89,
+          99
+        ],
+        "top_scenarios": [
+          {
+            "id": "118754987",
+            "scenario": "TP",
+            "prob": 0.7335767032462569
+          },
+          {
+            "id": "118754987",
+            "scenario": "PTP",
+            "prob": 0.20935832628936288
+          },
+          {
+            "id": "118754987",
+            "scenario": "PEB",
+            "prob": 0.027659441145568474
+          },
+          {
+            "id": "118754987",
+            "scenario": "STP",
+            "prob": 0.014607899580320442
+          },
+          {
+            "id": "118754987",
+            "scenario": "SEB",
+            "prob": 0.00949483524107669
+          }
+        ]
+      }
+    }
+  ]
+}
