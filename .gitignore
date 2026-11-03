@@ -5,3 +5,13 @@ data/
 models/
 *.egg-info/
 reports/
+
+# Paper build products
+paper/*.aux
+paper/*.log
+paper/*.bbl
+paper/*.blg
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.out
+paper/build.log
