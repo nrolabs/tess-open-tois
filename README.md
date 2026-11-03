@@ -1,399 +1,58 @@
-# TESS — exoplanet candidate search and vetting
+# tess-open-tois
 
-End-to-end pipeline on public TESS data:
+Search and vetting of TESS Objects of Interest (TOIs) that have no follow-up observations recorded
+on ExoFOP, using SPOC 120 s light curves. Code, trained model and results of the paper in `paper/`.
 
-1. **Collection** of the TOI catalog and of every SPOC 120 s light curve of the labeled stars.
-2. **Blind search** for periodic transits (BLS on the GPU) in each star.
-3. **Multi-view CNN** (5-model ensemble) scoring each signal.
-4. **Local false positive tests**: SNR, number of transits, odd/even, secondary eclipse, shape,
-   physical size, stellar density, transit source location from the centroid, and contamination.
-5. **False positive probability** (FPP/NFPP) with TRICERATOPS, using TIC/Gaia neighbors and the
-   SPOC apertures.
-6. **Ranking** in `reports/candidates.csv`, separating catalogued signals from new ones. A signal is
-   "catalogued" when it matches a TOI, a community TOI ([ExoFOP CTOI](https://exofop.ipac.caltech.edu/tess/view_ctoi.php)),
-   a published planet (NASA Exoplanet Archive), a SPOC TCE from any DV run
-   ([MAST TCE bulk](https://archive.stsci.edu/tess/bulk_downloads/bulk_downloads_tce.html)) or a known
-   eclipsing binary ([TESS EB catalog](https://archive.stsci.edu/hlsp/tess-ebs), Prša et al. 2022).
-   Matching is by period or harmonic and by phase, with a phase tolerance that grows with the
-   propagated 3σ ephemeris drift; when the drift exceeds a quarter period, the period alone decides.
-   Single-transit CTOIs match by event time; non-transiting planets and binaries match by period.
+The pipeline runs a blind periodic search (BLS) and a single/duo-transit search on the GPU, vets
+each signal with photometric, centroid, CCD common-mode and difference-image tests, scores it with
+a multi-view CNN, and computes false-positive probabilities with TRICERATOPS. Results are
+candidates for follow-up, not validated planets.
 
-The final result is a **candidate with statistical evidence**, not a confirmed planet. Confirmation
-needs observations a computer cannot replace (high-resolution imaging, spectroscopy, radial
-velocities). Strong candidates can be submitted to the community through
-[ExoFOP-TESS](https://exofop.ipac.caltech.edu/tess/).
+## Requirements
 
-## Commands
+Python 3.12 (pipeline), Python 3.13 (TRICERATOPS, isolated environment), an NVIDIA GPU with CUDA,
+GNU Make, `curl`, and a LaTeX distribution for reports and the paper.
 
-Requirements: Python 3.12 with `venv`/`pip` (main environment), Python 3.13 (TRICERATOPS
-environment), `curl`, GNU Make, an NVIDIA GPU with CUDA, and internet access.
+## Usage
 
 ```bash
-make setup PYTHON=/path/to/python3
-make catalog
-make curves
-make test
-make train
-make candidates
+make setup                # .venv (pipeline) and .venv-fpp (TRICERATOPS); PYTHON=/path/python3
+make catalog              # TOIs, CTOIs, published planets, SPOC TCEs, eclipsing binaries
+make curves               # light curves of labelled TOI hosts (training set)
+make train                # cross-validated CNN ensemble -> models/transit-cnn.pt
+make curves OPEN=1        # light curves of open-TOI hosts
+make candidates OPEN=1    # search and vet them -> reports/candidates/
+make report TIC=...       # MCMC fit, figures and PDF report for one star -> reports/ctoi/
+make test                 # unit tests, no network
 ```
 
-| Command | What it does |
-|---|---|
-| `make setup` | Creates `.venv` (CNN, PyTorch CUDA) and `.venv-fpp` (TRICERATOPS) and tests the GPU |
-| `make catalog` | Downloads TOIs, CTOIs, published planets, SPOC TCEs and known binaries; records source/hash |
-| `make curves` | Downloads/resumes every SPOC 120 s light curve of CP/KP/FP/FA stars |
-| `make curves FIELD=100` | Downloads 100 **non-TOI** stars with ≥30 sectors (fixed sample, all sectors) to search for new planets |
-| `make train` | Cross-validation by star, final ensemble, calibration and injection-recovery |
-| `make candidates` | Searches every downloaded star (BLS on the GPU); `TIC=...` for one star; `FIELD=1` for the non-TOI sample only |
-| `make report TIC=...` | CTOI package for the best event of a star (or `PERIOD= EPOCH= DURATION=`): MCMC fit, figures, LaTeX/PDF, ExoFOP row |
-| `make test` | Local tests, no network |
-
-Vet a specific event (period in days, epoch in BJD TDB, duration in hours):
+Paper:
 
 ```bash
-make candidates TIC=1528696 PERIOD=0.8820624 EPOCH=2458438.402842 DURATION=0.5759672
+.venv/bin/python supplementary.py      # pixel test and FPP for non-candidate signals
+.venv/bin/python paper/make_tables.py  # tables and numbers from the reports
+cd paper && latexmk -pdf paper.tex
 ```
 
-On this machine the system Python has no pip, hence the `PYTHON=` above. TRICERATOPS 1.1.0 needs
-`numpy<2` on Python 3.12, so it runs isolated in `.venv-fpp` (Python 3.13; `FPP_PYTHON=` changes
-the interpreter) and the pipeline calls it as a subprocess.
-
-## Code
-
-| File | Responsibility |
-|---|---|
-| `tess.py` | Command-line interface used by the Makefile |
-| `data.py` | TOI catalog, MAST manifests, light curve download and loading |
-| `lightcurve.py` | Transit-protected detrending, phase folding, CNN views |
-| `vetting.py` | False positive tests and the CNN scalar features |
-| `neural.py` | Dataset with per-star cache, CNN, cross-validated training, inference |
-| `search.py` | GPU BLS search, candidate pipeline, injection-recovery |
-| `single.py` | Single- and duo-transit search for long periods, CCD common-mode systematics test |
-| `pixels.py` | Difference images from target pixel files: transit source location |
-| `report.py` | Candidate report: MCMC transit fit, figures, LaTeX/PDF, ExoFOP CTOI row |
-| `fpp.py` | TRICERATOPS runner (isolated environment) |
-
-## Data collection
-
-- Catalog: [NASA Exoplanet Archive / TAP](https://exoplanetarchive.ipac.caltech.edu/docs/TAP/usingTAP.html), query `select * from toi`.
-- [TOI definitions](https://exoplanetarchive.ipac.caltech.edu/docs/API_TOI_columns.html): `CP`/`KP` → class 1;
-  `FP`/`FA` → class 0. `PC`, `APC` and unknown dispositions are left out of training.
-- Light curves: the [MAST per-sector manifests](https://archive.stsci.edu/tess/bulk_downloads.html)
-  (`tesscurl_sector_N_lc.sh`) list every SPOC 120 s file. Filtering them by catalog TICs gives the
-  exact file list, with no star-by-star search. Files come from the public AWS copy (`stpubdata`,
-  Open Data), with MAST as fallback. The TIC comes from the file name: exact match, no name
-  resolution to neighboring stars.
-- `--include-candidates` (in `python tess.py download`) also downloads PC/APC stars, which can be
-  searched but are not used for training.
-- Interrupt with Ctrl+C and rerun `make curves` to resume. FITS files truncated by interrupted
-  downloads are detected and downloaded again. Original FITS files are kept.
-
-In 2026-11 there were 2,657 eligible labeled TICs, of which 2,357 have SPOC 120 s light curves:
-15,834 files, ~29 GB of FITS and ~2.5 GB of `.npz`. At ~0.9 MB/s this takes ~10 hours.
-
-## Model
-
-- Input: global view (full orbit), local view (±3 durations), odd and even transits side by side,
-  and secondary view (phase 0.5), each with a coverage channel, plus 14 measured scalars (depth,
-  SNR, odd/even, secondary, shape, duration/period, transits, centroid, contamination, radius,
-  log g, Teff, magnitude and density). IDs, dispositions and catalog physical parameters are not
-  inputs; the catalog period/epoch/duration only drive the alignment.
-- Each TOI becomes one example with **all sectors combined**. In training, each single sector is
-  also an example (augmentation); validation and test use only the combined example.
-- Other planets of the same star are masked while measuring a signal.
-- The catalog ephemeris is refined within 3σ of its uncertainties, and sectors where it cannot
-  locate the transit (3σ > 1 duration) are dropped.
-- 1D CNN with residual blocks, one branch per view. CUDA-only, deterministic, mixed-precision
-  training.
-- **Nested cross-validation by TIC**: 5 folds; each star is tested exactly once by a model that
-  never saw it; each fold's validation set comes from the remaining stars. The final model is the
-  ensemble of the 5. The threshold (target precision `PRECISION`) and the ensemble's isotonic
-  calibration come from the out-of-fold predictions. If no threshold reaches the precision with 5
-  selections, `threshold: null`.
-- The report records per-fold, pooled and per-star metrics, metrics by depth, period, SNR and
-  number of sectors, the rejection rate of each vetting test per class, and injection-recovery.
-
-## False positive tests (`vetting.py`)
-
-| Test | Rejects (`fail`) | Warns (`warn`) |
-|---|---|---|
-| SNR (box of 80% of the duration, correlated noise and event-to-event scatter) | < 7.1 | |
-| Transits with data | < 2 | |
-| Odd/even (≥2 events in each group) | > 4σ | > 3σ |
-| Secondary eclipse at any phase, Bonferroni threshold, must exceed the largest brightening and imply albedo > 1 | > 5σ | above threshold |
-| Companion radius (depth × stellar radius) | > 25 R⊕ | |
-| Transit source from the centroid (source vs. target position, via WCS) | > 4σ and > 21″ | > 3σ and > 10″ |
-| V shape (trapezoid fit) | | ingress > 40% |
-| Duration too long for the stellar density | | ratio < 0.2 |
-| Contamination (CROWDSAP) | | < 0.8 |
-
-These thresholds will be recalibrated on the full dataset using `vetting_by_class` in
-`reports/training.json`. On an early sample (116 TOIs), 16% of CP/KP and 36% of FP/FA were
-rejected. Part of the planet rejections is low SNR on stars that still had few sectors downloaded.
-Many catalog FPs were identified only with ground-based observations that vetting cannot see; those
-are left to the CNN and the NFPP.
-
-## Final tiers (`make candidates`)
-
-| Tier | Criterion |
-|---|---|
-| `strong` | CNN above threshold, vetting passed, FPP < 1% and NFPP < 0.1% (stricter version of the [Giacalone et al. 2021](https://ui.adsabs.harvard.edu/abs/2021AJ....161...24G) criterion, which uses FPP < 1.5%) |
-| `candidate: likely planet` | CNN above threshold, vetting passed, FPP < 50% and NFPP < 0.1% |
-| `candidate: no FPP` | CNN and vetting passed, TRICERATOPS not computed |
-| `inconclusive` | CNN below threshold or high FPP |
-| `rejected` | Vetting failed, or NFPP > 10% (signal likely from a nearby star) |
-
-Even `strong` is statistical validation **without** high-resolution imaging: without a contrast
-curve, TRICERATOPS cannot rule out very close companions. Treat it as a follow-up priority.
-
-TRICERATOPS normally downloads a full TESScut cube per sector (thousands of frames) only to place
-the neighbors on the pixel grid, and version 1.1.0 reads corner keywords (`1CRV4P`/`2CRV4P`) that
-current TESScut files no longer have, so every sector failed. `fpp.py` instead takes the WCS, CCD
-corner and SPOC aperture from the APERTURE extension of our local light curve files: no image
-download, and the relative geometry matches TESScut to 0.001 px. Only the TIC/Gaia neighbor query
-and the TRILEGAL background query still use the network.
-
-Check on a confirmed planet (TOI-1194.01, 3 sectors, catalog ephemeris): vetting passed (SNR 217),
-CNN 0.956, NFPP ~4e-24, FPP 0.054 ± 0.021 (91% transiting planet; most of the rest is "planet on a
-bound companion"). Tier: `candidate: likely planet`. FPP < 1% for a real planet usually needs a
-high-resolution imaging contrast curve, which rules out close companions.
-
-## Transit search (`search.py`)
-
-The BLS search runs on the GPU (PyTorch, float64): for each batch of periods the light curve is
-folded into phase bins and every window and duration is evaluated with cumulative sums. Design,
-following the SPOC TPS:
-
-- **Red-noise-aware SNR.** The noise of the in-transit mean is measured at each tested duration's
-  timescale, so correlated noise is included. Detection requires SNR ≥ 7.1 (the TPS MES threshold).
-  The SDE is reported but not used as a gate: it rejected real signals with few transits.
-- **Narrow period ranges** (0.5–100 d in 13 ranges), each testing durations from 0.5 h up to a
-  quarter of its shortest period, so short-period, long-duration transits are not found at 2P.
-- **Consistency veto.** A detection that does not survive removing its strongest event (it should
-  keep about SNR·√((N−1)/N)) rests on a single event and is rejected.
-- **Edge veto.** Events whose in-transit points mostly lie within 0.5 d of a data gap are dropped
-  and the rest must still carry the signal (same rule as the consistency veto); scattered-light ramps
-  and filter edges were the main source of false alarms.
-- **Period alias check** (as in the SPOC DV): P/2 and P/3 are preferred when folding there is
-  stronger and consistent.
-- Up to 3 signals per star, masking ±1.5 durations after each one; harmonics of a signal already
-  found are not reported again.
-
-Calibration on 300 single-sector injections into planet-host stars (known transits removed),
-binned by expected SNR (white noise at 10-minute bins), with false alarms measured on inverted
-light curves, where no astrophysical transit exists:
-
-| Expected SNR | 7.1–10 | 10–15 | 15–25 | 25–50 | > 50 | False alarms (inverted) |
-|---|---|---|---|---|---|---|
-| Before (white-noise SNR + SDE gate) | 13% | 27% | 65% | 85% | 83% | ~4% |
-| Now | 12–18% | 67–73% | 88–90% | 93–98% | 98–99% | 19% |
-
-Higher false alarms are the intended trade-off: a missed planet is lost for good, while a false
-alarm still goes through vetting, the CNN and TRICERATOPS.
-
-**Detrending** is a Tukey biweight in a 0.75-day sliding time window (the wotan method), on the GPU
-in float64; it matches wotan within a median 0.8 ppm and runs 7.7× faster. The window was chosen on a
-frozen tuning set (paired comparison of 0.5, 0.75, 1.0 and 1.5 d at matched false-alarm rate).
-
-**Benchmark against the reference tools** (wotan biweight + TLS 2.0.4), on a held-out set of 300
-single-sector injections into planet-host stars never used for tuning, each pipeline taking its single
-best peak, evaluated once, at the same false-alarm rate on inverted light curves:
-
-| Held-out set | Method | Recovery at 1% FA | 5% FA | 10% FA | SNR 7–10 | SNR 10–15 | SNR 15–25 | SNR > 25 |
-|---|---|---|---|---|---|---|---|---|
-| 1st (earlier version, global edge veto) | This pipeline | 81% | 85% | 87% | 0% | 69% | 91% | 92% |
-| 1st | wotan + TLS (SDE) | 81% | 83% | 85% | 20% | 50% | 91% | 90% |
-| 2nd (current version, new injections) | This pipeline | 74% | 79% | 84% | 17% | 64% | 76% | 93% |
-| 2nd | wotan + TLS (SDE) | 69% | 77% | 77% | 50% | 60% | 70% | 87% |
-
-On the second held-out set (197 detectable cases) the difference is +3.5, +2.7 and +5.9 points at
-1%, 5% and 10% FA, with bootstrap 95% intervals of −6.3 to +16.0, −3.4 to +8.5 and −0.5 to +11.9:
-consistently ahead on both independent sets, but not yet statistically established. TLS remains
-better on the weakest signals (SNR 7–10). Rejected after testing on the tuning set: finer period,
-phase and duration grids (more trials raise the noise peaks as much as they raise the signal).
-A limb-darkened matched filter (the TLS idea) was evaluated and not adopted: for small planets its
-theoretical SNR gain over the optimal box is only ~1%.
-
-To avoid overfitting, settings are tuned only on one half of the host stars (split by TIC hash) and
-reported on the other half with different injections. A star with an 8-year baseline (473 thousand
-periods) takes ~3 min. The training report measures recovery of the full pipeline (BLS, vetting and
-CNN).
-
-## Long-period search (`single.py`)
-
-BLS needs several transits; a planet beyond ~100 days leaves one to three in a multi-year light
-curve. `make candidates` therefore also searches every star for isolated events, after masking
-the BLS signals and every catalogued transit:
-
-- **Detection**: 10-minute bins detrended by a biweight of three durations, then a matched box
-  filter at every time for durations of 2–25 h, with each sector's correlated noise at that
-  duration (GPU, float64). Events at single-event SNR ≥ 8, up to six per star.
-- **Vetting of each event**: the same tests as periodic signals where they apply (SNR, size,
-  centroid source location, crowding), on the sectors holding the event, plus
-  - distance to a data gap or segment end (ramps): fail within 0.5 d;
-  - symmetry of the two halves of the event: fail above 4σ;
-  - **V shape fails**: with no odd/even or secondary test, it is the only handle on grazing binaries;
-  - **CCD common mode**: the median normalized flux of all downloaded stars on the same sector,
-    camera and CCD (`data/common_mode.npz`, 30-minute bins); a simultaneous dip above 4σ marks the
-    event as instrumental. This test also applies to BLS signals;
-  - **per-star noise ceiling**: the same search on the star's inverted light curve gives the
-    strongest dip its own noise produces (variability, systematics and red noise make dips and
-    bumps alike); the event must be stronger.
-- **Periods**: for an isolated event, the periods the coverage allows (a predicted transit on
-  covered data without a dip excludes the period) and the period of a central circular transit
-  of that duration around the star. Two events with depths within 3σ and durations within a
-  factor 1.5 form a **duo**: periods Δt/n, pruned by coverage, ranked first by the stellar density
-  (aliases needing a period more than 4× shorter than the density implies are disfavoured), then
-  shortest first. The duo is vetted again folded at the best alias.
-- **Tiers**: no CNN (it was trained on folded periodic signals). TRICERATOPS runs on every event
-  that passes vetting, with the best alias (duos) or the shortest allowed period (singles); a
-  single event is never `strong`, because its period is unknown. Tiers carry `[single]` or `[duo]`.
-
-Calibration on the inverted light curves of the 100 field stars (pure noise; instrumental common
-dips appear with the opposite sign there and are counted accordingly):
-
-| Single-event SNR | Noise events | Pass vetting, before the last two tests | Pass vetting |
-|---|---|---|---|
-| ≥ 6 | 394 | 28 | 2 |
-| ≥ 8 | 237 | 17 | **1** |
-| ≥ 10 | 159 | 11 | 0 |
-
-The V-shape rule and the noise ceiling are physical rules, not tuned on these numbers; the
-calibration only chose the SNR threshold (8: about one false event per 100 stars).
-Detection sensitivity was measured by injecting one long-period transit (150–1000 d, physical
-trapezoid) into real field light curves; the final numbers are pending a rerun with the GPU free.
-
-## Pixel-level source test (`pixels.py`)
-
-Light curve files hold only the aperture sum and its centroid. For every signal that passes
-vetting (and the CNN, for periodic ones), the SPOC target pixel files of up to three sectors with
-transits are downloaded (~50 MB each, in 16 parallel byte ranges: the archive limits each
-connection to ~50 KB/s), and the difference image (out of transit minus in transit, ingress and
-egress excluded; error from the scatter between transits) is fitted with a Gaussian. The offset of
-that source from the target's catalogue position in the same stamp (WCS, 0.1 px systematic floor)
-is combined over sectors; **> 4σ and > 0.5 px (~10″) fails**, > 3σ and > 0.3 px warns. Images
-with a fitted amplitude below 5σ are not used.
-
-Check on TFOP dispositions (one sector each, the one closest to the catalogue epoch):
-
-| Group | Usable difference image | Failed (offset) | Offsets |
-|---|---|---|---|
-| FPs whose ExoFOP comment says NEB / off-target / centroid offset | 13 of 15 | **7** (+1 warning) | missed ones are within ~10″ |
-| Confirmed planets | 5 of 15 | **0** | 1.5–4″, 0.2–1.1σ |
-
-Neighbours closer than about half a pixel are beyond this test and are left to TRICERATOPS.
-
-## Candidate report (`report.py`)
-
-`make report TIC=...` turns the best event of `reports/candidates/<TIC>.json` (or a given ephemeris,
-which is first vetted, pixel-tested and FPP-scored like a search signal) into a folder
-`reports/ctoi/TIC<tic>-<search>-<T0>/` with:
-
-- an MCMC fit with a limb-darkened model (batman, quadratic law with Kipping q1/q2; mid-transit
-  time, period, Rp/R*, impact parameter, stellar density, flux offset and white noise), sampled
-  with emcee using differential-evolution moves until the chain exceeds 50 autocorrelation times;
-  errors are scaled by the time-averaging β factor for correlated noise; single events fit the
-  shape at a fixed period (shortest allowed), duos at the best alias;
-- derived parameters with stellar radius and Teff drawn from the TIC v8 errors: depth, T14, a/R*,
-  inclination, planet radius, semi-major axis, equilibrium temperature, insolation;
-- TRICERATOPS rerun with 10 Monte Carlo runs (the search uses 3; single runs scatter widely);
-- figures (light curve, folded fit and residuals, odd/even, phase curve, difference image,
-  posteriors), `report.tex` compiled to `report.pdf` (author and institution in `report.py`),
-  `summary.json`, `posterior.npz`, and `ctoi.csv` with the column names of the ExoFOP CTOI table.
-
-Nothing is submitted: the CTOI is uploaded by the user on ExoFOP with their own account (check the
-current upload template there).
-
-Validation on the confirmed planet TOI-1194.01 (catalogue ephemeris, 9 sectors, 93 transits):
-
-| Parameter | This fit | TOI catalogue |
-|---|---|---|
-| Period (d) | 2.3106447 ± 0.0000003 | 2.3106428 ± 0.0000009 |
-| Planet radius (R⊕) | 9.11 ± 0.55 | 8.77 ± 0.50 |
-| Depth (ppm) | 6525 ± 38 | 6911 ± 110 |
-| T14 (h) | 1.622 ± 0.010 | 1.294 ± 0.044 |
-| Impact parameter | 0.832 ± 0.009 | — |
-
-Radius and period agree. The grazing geometry (b ≈ 0.83) explains the depth and duration
-differences with the quick SPOC estimates: the folded data show first to last contact over ~1.6 h.
-
-## Generated files
+## Layout
 
 | Path | Content |
 |---|---|
-| `data/catalogs/toi.json`, `.csv`, `snapshot.json`, `snapshots/` | Catalog, source, hash and versions |
-| `data/catalogs/known.json` | CTOIs, published planets, SPOC TCEs and eclipsing binaries used to tell catalogued signals from new ones |
-| `data/manifests/sector-N.sh` | Official per-sector manifests (cache) |
-| `data/mast/lc/*.fits` | Original FITS files, kept |
-| `data/curves/<TIC>/sector-N.npz` | BJD TDB time, PDCSAP flux, error and MOM_CENTR centroids |
-| `data/curves/<TIC>/sector-N.json` | Product, CROWDSAP, TIC stellar parameters, target CCD position |
-| `data/field.json` | Current non-TOI sample (`FIELD=N`) |
-| `data/features/<TIC>.pkl` | Per-star feature and metric cache |
-| `data/fpp/` | TRICERATOPS inputs and outputs |
-| `data/download-log.json` | Errors from the last download |
-| `models/transit-cnn.pt` | Ensemble, threshold and calibration |
-| `reports/training.json` | Metrics, folds, subgroups, vetting per class, injection-recovery |
-| `reports/skipped.json` | Excluded examples and reason |
-| `reports/candidates/<TIC>.json` | Signals of each star with metrics, CNN, FPP and tier |
-| `reports/candidates.csv` | Ranking of every signal |
+| `tess.py` | Command-line interface |
+| `data.py` | Catalogues and light-curve downloads |
+| `lightcurve.py` | Detrending, folding and CNN views |
+| `search.py`, `single.py` | Periodic and single/duo-transit searches, tiers |
+| `vetting.py`, `pixels.py` | Photometric, centroid and difference-image tests |
+| `neural.py` | CNN training and inference |
+| `fpp.py` | TRICERATOPS runner |
+| `report.py` | Candidate transit fit and report |
+| `models/transit-cnn.pt` | Trained ensemble, threshold and calibration |
+| `data/open.json`, `data/catalogs/exofop_toi.csv` | Open-TOI sample (ExoFOP table of 2026-11-02) |
+| `reports/` | Per-star results, supplementary tests, candidate reports, CNN metrics |
+| `paper/` | Manuscript, tables, figures |
 
-## Limitations
+Light curves and target pixel files are downloaded from MAST and are not versioned.
 
-- TOI labels (CP/KP vs FP/FA) do not represent the mix of signals in a blind search: the CNN
-  calibration applies to that population, not to "any dip in brightness".
-- The search only covers downloaded stars. There are 585,858 non-TOI stars with 120 s light curves
-  (~3 TB); `FIELD=N` downloads a fixed sample of the 4,662 with ≥30 sectors (none reach 50), with all
-  sectors. SPOC already searched these stars: the discovery space is in weak signals that only
-  appear when sectors are combined, and in long periods with one to three transits.
-- SPOC 120 s light curves only; FFIs (QLP, TESS-SPOC) and full pixel data are not used.
-- Injection-recovery uses trapezoidal transits without limb darkening (one sector at a time for
-  periodic signals, all sectors for long-period events).
-- Systems with strong transit timing variations (TTV) may fail the ephemeris tests.
-- The project never submits anything automatically to ExoFOP, Zooniverse or any other service.
+## Author
 
-## Roadmap
-
-Updated on 2026-11-02. Done items are kept with the evidence that closed them.
-
-| Priority | Item | Status |
-|---|---|---|
-| P0 | Benchmark against ExoMiner++ | Open. Published scores for 147,568 TCEs S1–67 ([Zenodo](https://zenodo.org/record/15466292), [paper](https://arxiv.org/abs/2502.09790)); same TCEs and labels |
-| P1 | Gaia DR3: RUWE (unresolved binaries), eclipsing binary catalogue (~2M), neighbour positions | Open. Cheap catalogue query; would add a binarity test and widen the known-binary cross-match |
-| P1 | TESS FFI light curves (TESS-SPOC, QLP) for sectors without 120 s data | Open. More transits per star and better alias pruning for duos |
-| P1 | ExoFOP high-resolution imaging contrast curves for TRICERATOPS | Open. The usual way to reach FPP < 1% |
-| P1 | Weak signals (SNR 7–10), where TLS still recovers more | Open. A limb-darkened template was tried and rejected (see Transit search) |
-| P1 | Classifier for single and duo events | Open. Today they are vetted by physical rules only |
-| P1 | TTV handling | Open. Strong TTVs may fail the ephemeris and BLS assumptions |
-| P1 | FFI light curves (QLP, TESS-SPOC) and 20 s data | Open. Many more stars; limited by bandwidth and disk |
-| P2 | Temporal model with attention; heterogeneous ensemble | Open. Evaluate against the current CNN |
-| P2 | Uncertainty and out-of-distribution detection | Open |
-| — | Pixel-level source localization (difference images) | **Done** (`pixels.py`): 7/13 TFOP NEBs failed, 0/5 planets |
-| — | Cross-match with TCEs, CTOIs, published planets, binaries | **Done** (`known.json`) |
-| — | Single- and duo-transit search | **Done** (`single.py`) |
-| — | Instrumental systematics shared by stars on a CCD | **Done** (common-mode test) |
-| — | Training on blind-search noise | **Not needed**: on 200 inverted single-sector curves the full pipeline selected 1 false alarm (0.5%); the CNN rejected 19 of the 20 noise signals that passed vetting |
-| — | Red-noise-aware detection statistic | **Done** (per-duration correlated noise in BLS and single events) |
-| — | TRICERATOPS working offline for pixel geometry | **Done** (`fpp.py`) |
-
-### Research ideas (novelty not yet verified)
-
-Proposed on 2026-11-02. As far as we know neither has been explored systematically, but a literature
-search (arXiv/ADS) must confirm that before any implementation. Do the cheaper idea 2 first.
-
-1. **Multi-sector aperture forward model for source localization.** Every sector places the star on
-   different pixels with a different SPOC aperture and different neighbor contamination; stars with
-   ≥30 sectors give ~30 independent configurations. If the transit is on the target, the
-   crowding-corrected depth is the same in every sector; if it comes from a neighbor, the observed
-   depth follows that neighbor's flux fraction inside each aperture. Using the Gaia neighbors (as in
-   TRICERATOPS) and the APERTURE extension already stored in our FITS, predict the per-sector depth
-   for each source hypothesis and compare likelihoods. This localizes the source from light curves
-   alone, without downloading TPFs, and targets cases where the centroid test is inconclusive.
-   Related work: per-aperture depth checks (DAVE, LATTE) and TRICERATOPS use apertures, but not as a
-   joint statistical fit across tens of sectors.
-2. **Recurrence across independent SPOC DV runs as a reliability statistic.** `data/catalogs/known.json`
-   holds 341,351 TCEs from 132 DV runs (single- and multi-sector). A weak signal found once is often
-   noise; the same period and phase found independently in runs from different sectors and years is
-   much less likely to be chance. Turn the number and independence of matching runs into a
-   reliability score for each signal, including TCEs never promoted to TOI, where planets missed by
-   human triage may hide. Related work: Kepler population-level reliability (inverted/scrambled
-   light curves) and the per-TCE DV bootstrap false alarm probability, not cross-run recurrence.
+Isak Paulo de Andrade Ruas, NROLABS ([ORCID 0000-0002-3986-8048](https://orcid.org/0000-0002-3986-8048)).
