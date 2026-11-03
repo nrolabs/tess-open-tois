@@ -10,7 +10,7 @@
 
 \title{Independent Search and Vetting of TESS Objects of Interest Without Follow-up Observations}
 
-\author{Isak Paulo de Andrade Ruas}
+\author[0000-0002-3986-8048]{Isak Paulo de Andrade Ruas}
 \affiliation{NROLABS}
 \email{isakruas@gmail.com}
 
@@ -122,7 +122,10 @@ light curve gives the strongest dip that its own noise produces, and the event m
 30\%. Two events with depths within $3\sigma$ and durations within a factor of 1.5 form a duo, whose
 period aliases $\Delta t/n$ are pruned when a predicted transit falls on covered data without a dip.
 On the inverted light curves of 100 stars with at least 30 sectors, about one noise event per 100
-stars survives this vetting. \input{tables/single_injection.tex}
+stars survives this vetting. \input{tables/single_injection.tex} The vetting of isolated events is
+therefore conservative: below SNR\,40 about half of the real transits are rejected, mostly by the
+noise ceiling of variable stars and by their proximity to data gaps, in exchange for a false-alarm
+rate of about one event per 100 stars.
 
 \subsection{Photometric vetting}\label{sec:vetting}
 Every periodic signal is phase-folded with a transit-protected detrending and tested for: SNR with
