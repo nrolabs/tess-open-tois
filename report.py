@@ -1,7 +1,7 @@
 """Candidate report for an ExoFOP CTOI submission: MCMC transit fit, figures, LaTeX/PDF and the CTOI row.
 
-The fit uses a limb-darkened transit model (batman, quadratic law with the Kipping 2013 q1/q2
-parameterization) sampled with emcee. Free parameters: mid-transit time, period, Rp/R*, impact
+The fit uses a limb-darkened transit model (quadratic law with the Kipping 2013 q1/q2
+parameterization) computed on the GPU in float64 and checked against batman, sampled with emcee. Free parameters: mid-transit time, period, Rp/R*, impact
 parameter, stellar density (sets a/R*), q1, q2, a flux offset and the white noise. Correlated noise
 is included by scaling the errors with the time-averaging β factor (Winn et al. 2008) measured on
 the best-fit residuals. For single events the period is fixed at the shortest value the coverage
@@ -121,18 +121,75 @@ def tic_star(tic):
 # ---- Transit model and sampler ----
 
 class Model:
-    """batman model on fixed times; theta = [t0, P, k, b, log10 ρ*(g/cm³), q1, q2, f0, log σ]."""
+    """Limb-darkened transit model on the GPU in float64; theta = [t0, P, k, b, log10 ρ*(g/cm³), q1, q2,
+    f0, log σ] (P left out when fixed).
 
-    def __init__(self, t, f, fixed_period=None):
-        import batman
+    The blocked flux is linear in the quadratic limb-darkening coefficients:
+        blocked(z, k) = [B0(z, k) + u1·B1(z, k) + u2·B2(z, k)] / [π (1 − u1/3 − u2/6)],
+    where Bn sums, over ANNULI stellar annuli, the exact overlap area of the planet disk with each
+    annulus times that annulus's exact mean intensity term (closed-form integral of the law). The three
+    tables are computed once on a grid of Rp/R* and separation; each MCMC step only interpolates them,
+    for all walkers at once. Checked against batman (tests/test_report.py).
+    """
+    ANNULI = 1024
+    Z_POINTS = 4096
+    K_POINTS = 1024
+    SUPERSAMPLE = 15
+
+    def __init__(self, t, f, fixed_period=None, k_range=(1e-3, .5)):
+        import torch
+        self.torch = torch
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.t, self.f, self.fixed_period = t, f, fixed_period
-        self.params = batman.TransitParams()
-        p = self.params
-        p.t0, p.per, p.rp, p.a, p.inc, p.ecc, p.w = 0., 1., .1, 10., 90., 0., 90.
-        p.u, p.limb_dark = [.4, .2], 'quadratic'
-        # 120 s cadence: supersampling avoids smearing ingress and egress.
-        self.model = batman.TransitModel(p, t, supersample_factor=7, exp_time=EXPOSURE_DAYS)
+        # 120 s cadence: the model is averaged over SUPERSAMPLE instants within each exposure.
+        offsets = ((np.arange(self.SUPERSAMPLE) + .5) / self.SUPERSAMPLE - .5) * EXPOSURE_DAYS
+        self.times = self.tensor((t[:, None] + offsets[None, :]).ravel())
+        self.flux_data = self.tensor(f)
         self.beta = 1.
+        self.build(*k_range)
+
+    def tensor(self, x):
+        return self.torch.as_tensor(np.asarray(x, dtype=float), dtype=self.torch.float64, device=self.device)
+
+    def build(self, k_lo, k_hi):
+        """B0, B1, B2 tables on k ∈ [k_lo, k_hi] and z ∈ [0, 1 + k_hi]."""
+        torch = self.torch
+        self.k_lo, self.k_hi = float(k_lo), float(k_hi)
+        edges = np.sin(np.linspace(0, np.pi / 2, self.ANNULI + 1))   # denser toward the limb
+        mu = np.sqrt(1 - edges ** 2)
+        a, b = mu[:-1], mu[1:]                                         # annulus inner and outer μ
+        coefficient = np.array([
+            np.pi * (a ** 2 - b ** 2),
+            -2 * np.pi * ((a ** 2 / 2 - a ** 3 / 3) - (b ** 2 / 2 - b ** 3 / 3)),
+            -2 * np.pi * ((a ** 2 / 2 - 2 * a ** 3 / 3 + a ** 4 / 4) - (b ** 2 / 2 - 2 * b ** 3 / 3 + b ** 4 / 4))])
+        ring = np.pi * (edges[1:] ** 2 - edges[:-1] ** 2)
+        weight = self.tensor(coefficient / ring)                       # mean intensity terms per annulus
+        r = self.tensor(edges)
+        self.k_grid = torch.linspace(self.k_lo, self.k_hi, self.K_POINTS, dtype=torch.float64, device=self.device)
+        self.z_max = 1 + self.k_hi
+        z = torch.linspace(0, self.z_max, self.Z_POINTS, dtype=torch.float64, device=self.device)
+        tables = torch.zeros(3, self.K_POINTS, self.Z_POINTS, dtype=torch.float64, device=self.device)
+        step = 8
+        for i in range(0, self.K_POINTS, step):
+            kk = self.k_grid[i:i + step, None, None]
+            area = self.overlap(r[None, None, :], kk, z[None, :, None])              # K × Z × (ANNULI + 1)
+            tables[:, i:i + step, :] = ((area[..., 1:] - area[..., :-1]) @ weight.T).permute(2, 0, 1)
+        self.tables = tables
+
+    def overlap(self, radius, k, z):
+        """Area of the intersection of a stellar circle (radius) and the planet disk (k) at separation z."""
+        torch = self.torch
+        kk = torch.as_tensor(k, dtype=torch.float64, device=self.device)
+        r, zz, kk = torch.broadcast_tensors(radius, z, kk)
+        inside = zz <= (r - kk).abs()
+        outside = zz >= r + kk
+        safe_z, safe_r = zz.clamp(min=1e-15), r.clamp(min=1e-15)
+        c1 = ((zz ** 2 + r ** 2 - kk ** 2) / (2 * safe_z * safe_r)).clamp(-1, 1)
+        c2 = ((zz ** 2 + kk ** 2 - r ** 2) / (2 * safe_z * kk)).clamp(-1, 1)
+        lens = (r ** 2 * torch.arccos(c1) + kk ** 2 * torch.arccos(c2)
+                - .5 * ((-zz + r + kk) * (zz + r - kk) * (zz - r + kk) * (zz + r + kk)).clamp(min=0).sqrt())
+        full = np.pi * torch.minimum(r, kk) ** 2
+        return torch.where(inside, full, torch.where(outside, torch.zeros_like(lens), lens))
 
     def unpack(self, theta):
         if self.fixed_period is not None:
@@ -142,48 +199,74 @@ class Model:
             t0, period, k, b, log_rho, q1, q2, f0, log_s = theta
         return t0, period, k, b, log_rho, q1, q2, f0, log_s
 
-    def light_curve(self, theta):
-        t0, period, k, b, log_rho, q1, q2, f0, _ = self.unpack(theta)
-        a = a_over_r(10 ** log_rho, period)
-        p = self.params
-        p.t0, p.per, p.rp, p.a = t0, period, k, a
-        p.inc = np.degrees(np.arccos(min(b / a, 1.)))
-        p.u = [2 * np.sqrt(q1) * q2, np.sqrt(q1) * (1 - 2 * q2)]
-        return self.model.light_curve(p) * (1 + f0)
+    def columns(self, thetas):
+        x = self.tensor(np.atleast_2d(thetas))
+        if self.fixed_period is not None:
+            x = self.torch.cat([x[:, :1], self.torch.full_like(x[:, :1], self.fixed_period), x[:, 1:]], 1)
+        return x.T
+
+    def model_flux(self, thetas, times=None):
+        """Model flux (W × N) at the supersampled data times (averaged per exposure), or at given times."""
+        torch = self.torch
+        t0, period, k, b, log_rho, q1, q2, f0, _ = self.columns(thetas)
+        a = (G_CGS * 10 ** log_rho * (period * 86400) ** 2 / (3 * np.pi)) ** (1 / 3)
+        cos_i = (b / a).clamp(max=1)
+        u1, u2 = 2 * q1.sqrt() * q2, q1.sqrt() * (1 - 2 * q2)
+        when = self.times if times is None else self.tensor(times)
+        phase = (when[None, :] - t0[:, None]) / period[:, None]
+        angle = 2 * np.pi * (phase - phase.round())
+        z = a[:, None] * (angle.sin() ** 2 + (cos_i[:, None] * angle.cos()) ** 2).sqrt()
+        # Bilinear interpolation of the three tables in (k, z).
+        kf = ((k - self.k_lo) / (self.k_hi - self.k_lo) * (self.K_POINTS - 1)).clamp(0, self.K_POINTS - 1 - 1e-9)
+        k0 = kf.floor().long()
+        wk = (kf - k0)[:, None]
+        zf = (z / self.z_max * (self.Z_POINTS - 1)).clamp(0, self.Z_POINTS - 1 - 1e-9)
+        z0 = zf.floor().long()
+        wz = zf - z0
+        blocked = 0
+        for n, coefficient in enumerate((torch.ones_like(u1), u1, u2)):
+            table = self.tables[n]
+            low, high = table[k0], table[k0 + 1]                              # W × Z
+            row = low + wk * (high - low)
+            value = row.gather(1, z0) + wz * (row.gather(1, z0 + 1) - row.gather(1, z0))
+            blocked = blocked + coefficient[:, None] * value
+        blocked = blocked / (np.pi * (1 - u1 / 3 - u2 / 6))[:, None]
+        blocked = torch.where((z < 1 + k[:, None]) & (angle.cos() > 0), blocked, torch.zeros_like(blocked))
+        flux = (1 - blocked) * (1 + f0[:, None])
+        if times is None:
+            flux = flux.reshape(flux.shape[0], -1, self.SUPERSAMPLE).mean(-1)
+        return flux
+
+    def light_curve(self, theta, times=None):
+        return self.model_flux(theta, times)[0].cpu().numpy()
+
+    def log_probability(self, thetas, bounds, names):
+        """Log posterior of every walker at once (uniform priors within bounds)."""
+        torch = self.torch
+        thetas = np.atleast_2d(thetas)
+        ok = np.ones(len(thetas), bool)
+        for i, name in enumerate(names):
+            lo, hi = bounds[name]
+            ok &= (thetas[:, i] > lo) & (thetas[:, i] < hi)
+        t0, period, k, b, log_rho, q1, q2, f0, log_s = [np.asarray(c) for c in self.unpack(thetas.T)]
+        ok &= (k >= self.k_lo) & (k <= self.k_hi) & (b <= 1 + k)
+        ok &= a_over_r(10 ** log_rho, period) > 1 + k
+        out = np.full(len(thetas), -np.inf)
+        if ok.any():
+            flux = self.model_flux(thetas[ok])
+            sigma = self.tensor(np.exp(log_s[ok]) * self.beta)
+            chi2 = ((self.flux_data[None, :] - flux) ** 2).sum(1)
+            out[ok] = (-.5 * chi2 / sigma ** 2 - flux.shape[1] * sigma.log()).cpu().numpy()
+        return out
 
 
 def a_over_r(rho_cgs, period_days):
     return (G_CGS * rho_cgs * (period_days * 86400) ** 2 / (3 * np.pi)) ** (1 / 3)
 
 
-_MODEL, _BOUNDS = None, None
-
-
-def log_probability(theta):
-    t0, period, k, b, log_rho, q1, q2, f0, log_s = _MODEL.unpack(theta)
-    names = _MODEL_NAMES()
-    for name, value in zip(names, theta):
-        lo, hi = _BOUNDS[name]
-        if not lo < value < hi:
-            return -np.inf
-    if b > 1 + k:
-        return -np.inf
-    a = a_over_r(10 ** log_rho, period)
-    if a <= 1 + k:
-        return -np.inf
-    sigma = np.exp(log_s) * _MODEL.beta
-    residual = _MODEL.f - _MODEL.light_curve(theta)
-    return -.5 * np.sum(residual ** 2) / sigma ** 2 - len(residual) * np.log(sigma)
-
-
-def _MODEL_NAMES():
+def parameter_names(fixed_period):
     names = ['t0', 'period', 'k', 'b', 'log_rho', 'q1', 'q2', 'f0', 'log_sigma']
-    return [n for n in names if not (n == 'period' and _MODEL.fixed_period is not None)]
-
-
-def _init_worker(model, bounds):
-    global _MODEL, _BOUNDS
-    _MODEL, _BOUNDS = model, bounds
+    return [n for n in names if not (n == 'period' and fixed_period is not None)]
 
 
 def beta_factor(t, residual, duration):
@@ -204,65 +287,71 @@ def beta_factor(t, residual, duration):
     return float(max(1., np.median(betas))) if betas else 1.
 
 
-def fit(t, f, guess, fixed_period=None, max_steps=MAX_STEPS, workers=8):
-    """MAP fit, β factor, then emcee. Returns samples (dict of arrays), the MAP vector and diagnostics."""
+def fit(t, f, guess, fixed_period=None, max_steps=MAX_STEPS):
+    """MAP fit, β factor, then emcee with all walkers evaluated together on the GPU.
+    Returns samples (dict of arrays), the MAP vector, diagnostics and the model."""
     import emcee
-    import multiprocessing
     from scipy.optimize import minimize
-    global _MODEL, _BOUNDS
-    model = Model(t, f, fixed_period)
+    k0 = np.sqrt(max(guess['depth'], 1e-6))
+    # Rp/R* tables span 0.3–3× the depth estimate for the MAP search, then 0.6–1.6× the MAP value for
+    # the MCMC (a fine grid; the posterior width is checked against these limits below).
+    model = Model(t, f, fixed_period, (max(1e-4, .3 * k0), min(.6, 3 * k0)))
+    names = parameter_names(fixed_period)
     duration = guess['duration']
     bounds = {'t0': (guess['t0'] - duration / 2, guess['t0'] + duration / 2),
               'period': (guess['period'] * (1 - 1e-3), guess['period'] * (1 + 1e-3)),
               'k': (1e-3, .5), 'b': (0., 1.5), 'log_rho': (-3., 2.), 'q1': (0., 1.), 'q2': (0., 1.),
               'f0': (-.01, .01), 'log_sigma': (-14., -2.)}
-    _MODEL, _BOUNDS = model, bounds
-    names = _MODEL_NAMES()
+    log_probability = lambda thetas: model.log_probability(thetas, bounds, names)
     start = {'t0': guess['t0'], 'period': guess['period'], 'k': np.sqrt(max(guess['depth'], 1e-6)),
              'b': .3, 'log_rho': np.log10(guess['rho']), 'q1': .36, 'q2': .3, 'f0': 0.,
              'log_sigma': np.log(np.std(f))}
     x0 = np.array([start[n] for n in names])
-    best = minimize(lambda x: -log_probability(x) if np.isfinite(log_probability(x)) else 1e25, x0,
-                    method='Nelder-Mead', options={'maxiter': 20000, 'maxfev': 20000, 'xatol': 1e-9, 'fatol': 1e-9})
-    x_map = best.x if np.isfinite(log_probability(best.x)) else x0
+    objective = lambda x: -log_probability(x)[0] if np.isfinite(log_probability(x)[0]) else 1e25
+    best = minimize(objective, x0, method='Nelder-Mead',
+                    options={'maxiter': 20000, 'maxfev': 20000, 'xatol': 1e-9, 'fatol': 1e-9})
+    x_map = best.x if np.isfinite(log_probability(best.x)[0]) else x0
+    k_map = x_map[names.index('k')]
+    model.build(max(1e-4, .6 * k_map), min(.6, 1.6 * k_map))
     model.beta = beta_factor(t, f - model.light_curve(x_map), duration)
     ndim = len(names)
     scale = np.array([{'t0': 1e-4, 'period': 1e-6, 'k': 1e-3, 'b': .02, 'log_rho': .02, 'q1': .02,
                        'q2': .02, 'f0': 1e-5, 'log_sigma': .01}[n] for n in names])
-    walkers = []
     rng = np.random.default_rng(1)
+    walkers = np.empty((0, ndim))
     while len(walkers) < WALKERS:
-        trial = x_map + scale * rng.normal(size=ndim)
-        if np.isfinite(log_probability(trial)):
-            walkers.append(trial)
-    # The model has no CUDA state, so forked workers are safe and use the CPU cores the search leaves free.
+        trial = x_map + scale * rng.normal(size=(4 * WALKERS, ndim))
+        walkers = np.vstack([walkers, trial[np.isfinite(log_probability(trial))]])
+    walkers = walkers[:WALKERS]
     converged, tau, previous = False, np.full(ndim, np.nan), np.inf
-    with multiprocessing.get_context('fork').Pool(workers, initializer=_init_worker,
-                                                  initargs=(model, bounds)) as pool:
-        # Differential-evolution moves follow the strong b–Rp/R*–density correlation of grazing transits,
-        # which the default stretch move explores slowly.
-        moves = [(emcee.moves.DEMove(), .8), (emcee.moves.DESnookerMove(), .2)]
-        sampler = emcee.EnsembleSampler(WALKERS, ndim, log_probability, pool=pool, moves=moves)
-        state = np.array(walkers)
-        while sampler.iteration < max_steps:
-            state = sampler.run_mcmc(state, BLOCK, progress=False)
-            tau = emcee.autocorr.integrated_time(sampler.get_chain(), quiet=True)
-            worst = float(np.max(tau))
-            print(f'  MCMC {sampler.iteration} steps: max autocorrelation {worst:.0f} steps', flush=True)
-            if sampler.iteration > 50 * worst and abs(previous - worst) / worst < .05:
-                converged = True
-                break
-            previous = worst
+    # Differential-evolution moves follow the strong b–Rp/R*–density correlation of grazing transits,
+    # which the default stretch move explores slowly.
+    moves = [(emcee.moves.DEMove(), .8), (emcee.moves.DESnookerMove(), .2)]
+    sampler = emcee.EnsembleSampler(WALKERS, ndim, log_probability, moves=moves, vectorize=True)
+    state = walkers
+    while sampler.iteration < max_steps:
+        state = sampler.run_mcmc(state, BLOCK, progress=False)
+        tau = emcee.autocorr.integrated_time(sampler.get_chain(), quiet=True)
+        worst = float(np.max(tau))
+        print(f'  MCMC {sampler.iteration} steps: max autocorrelation {worst:.0f} steps', flush=True)
+        if sampler.iteration > 50 * worst and abs(previous - worst) / worst < .05:
+            converged = True
+            break
+        previous = worst
     # Burn-in: five autocorrelation times; thinning by half of one.
     burn = int(5 * np.max(tau)) if np.all(np.isfinite(tau)) else sampler.iteration // 2
     chain = sampler.get_chain(discard=burn, thin=max(1, int(np.min(tau) / 2)), flat=True)
     samples = {n: chain[:, i] for i, n in enumerate(names)}
+    k_edge = bool(np.percentile(samples['k'], .1) < model.k_lo * 1.02 or np.percentile(samples['k'], 99.9) > model.k_hi * .98)
     if fixed_period is not None:
         samples['period'] = np.full(len(chain), fixed_period)
     diagnostics = {'beta': model.beta, 'acceptance': float(np.mean(sampler.acceptance_fraction)),
                    'autocorrelation_steps': {n: float(v) for n, v in zip(names, tau)},
                    'steps': int(sampler.iteration), 'burn': burn, 'walkers': WALKERS, 'converged': converged,
-                   'independent_samples': int(len(chain) * max(1, int(np.min(tau) / 2)) / np.max(tau))}
+                   'independent_samples': int(len(chain) * max(1, int(np.min(tau) / 2)) / np.max(tau)),
+                   'k_table_range': [model.k_lo, model.k_hi], 'posterior_touches_k_table_edge': k_edge,
+                   'model': f'GPU float64, {Model.ANNULI} annuli, {Model.K_POINTS}x{Model.Z_POINTS} tables, '
+                            f'{Model.SUPERSAMPLE}x supersampling'}
     return samples, dict(zip(names, x_map)), diagnostics, model
 
 
@@ -307,7 +396,7 @@ def figures(folder, prep, t, f, model, samples, event, metrics):
     period = float(np.median(samples['period']))
     t0 = float(np.median(samples['t0']))
     duration = float(np.median(derived(samples, {}, np.random.default_rng(0))['duration_hours'])) / 24
-    names = list(_MODEL_NAMES())
+    names = parameter_names(model.fixed_period)
     median = np.array([np.median(samples[n]) for n in names])
     files = {}
 
@@ -329,10 +418,7 @@ def figures(folder, prep, t, f, model, samples, event, metrics):
 
     # 2. Folded transit with the posterior median model and residuals.
     phase = wrap(t - t0, period) * 24
-    order = np.argsort(phase)
     fine = np.linspace(phase.min(), phase.max(), 1500)
-    import batman
-    p = model.params
     curve = model.light_curve(median)
     fig, (top, bottom) = plt.subplots(2, 1, figsize=(6, 4.4), sharex=True, gridspec_kw={'height_ratios': [3, 1]})
     top.plot(phase, (f - 1) * 1e3, '.', ms=1, color='0.75')
@@ -342,8 +428,10 @@ def figures(folder, prep, t, f, model, samples, event, metrics):
                for i in np.unique(which) if (which == i).sum() > 3]
     cx, cy, ce = map(np.array, zip(*centers))
     top.errorbar(cx, (cy - 1) * 1e3, ce * 1e3, fmt='o', ms=3, color='k', lw=.8)
-    smooth = batman.TransitModel(p, t0 + fine / 24, supersample_factor=7, exp_time=EXPOSURE_DAYS).light_curve(p)
-    top.plot(fine, (smooth * (1 + median[names.index('f0')]) - 1) * 1e3, color='tab:red', lw=1.4)
+    # Model averaged over the 120 s exposure, as the data are.
+    offsets = ((np.arange(Model.SUPERSAMPLE) + .5) / Model.SUPERSAMPLE - .5) * EXPOSURE_DAYS
+    smooth = model.light_curve(median, (t0 + fine[:, None] / 24 + offsets).ravel()).reshape(len(fine), -1).mean(1)
+    top.plot(fine, (smooth - 1) * 1e3, color='tab:red', lw=1.4)
     top.set_ylabel('Relative flux (ppt)'), top.set_title('Phase-folded transit, posterior median model')
     residual = f - curve
     bottom.plot(phase, residual * 1e3, '.', ms=1, color='0.75')
@@ -563,7 +651,7 @@ Distance (pc) & {fmt(star.get('d'))} \\\\\\bottomrule
 \\end{{tabular}}
 
 \\section*{{Transit fit}}
-Limb-darkened model (batman, quadratic law, Kipping $q_1,q_2$), emcee with {fit['walkers']} walkers,
+Limb-darkened model (quadratic law, Kipping $q_1,q_2$; {tex(fit.get('model', ''))}), emcee with {fit['walkers']} walkers,
 {fit['steps']} steps ({fit['burn']} burn-in), run until the chain exceeded 50 autocorrelation times.
 Medians and 68\\% intervals.
 

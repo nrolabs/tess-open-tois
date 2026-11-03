@@ -27,13 +27,25 @@ class ReportTests(unittest.TestCase):
         self.assertAlmostEqual(np.median(out['a_au']), 1., delta=.01)
         self.assertAlmostEqual(np.median(out['radius_earth']), 1.004, delta=.01)
 
-    def test_model_reproduces_injected_depth(self):
-        t = np.linspace(-.2, .2, 2000)
-        model = report.Model(t, np.ones_like(t))
-        # theta = [t0, P, k, b, log_rho, q1, q2, f0, log_sigma]
-        curve = model.light_curve([0., 3., .1, 0., np.log10(1.41), .36, .3, 0., -7.])
-        self.assertAlmostEqual(1 - curve.min(), .01 * 1.15, delta=.002)
-        self.assertAlmostEqual(curve[0], 1., places=6)
+    def test_gpu_model_matches_batman_and_exact_exposure_average(self):
+        import batman
+        t = np.linspace(-.12, .12, 1201)
+        exposure = report.EXPOSURE_DAYS
+        for k, b, q1, q2, log_rho, period in ((.1, 0., .36, .3, .15, 3.), (.084, .832, .33, .46, .196, 2.31),
+                                               (.01, .3, .5, .2, .5, 10.), (.15, .5, .9, .1, 1., 1.5)):
+            model = report.Model(t, np.ones_like(t), None, (.6 * k, 1.6 * k))
+            theta = [0., period, k, b, log_rho, q1, q2, 0., -7.]
+            p = batman.TransitParams()
+            a = report.a_over_r(10 ** log_rho, period)
+            p.t0, p.per, p.rp, p.a, p.inc, p.ecc, p.w = 0., period, k, a, np.degrees(np.arccos(b / a)), 0., 90.
+            p.u, p.limb_dark = [2 * np.sqrt(q1) * q2, np.sqrt(q1) * (1 - 2 * q2)], 'quadratic'
+            # Instantaneous flux: exact geometry against the analytic Mandel & Agol model.
+            reference = batman.TransitModel(p, t).light_curve(p)
+            self.assertLess(np.max(np.abs(model.light_curve(theta, t) - reference)), 1e-7)
+            # 120 s average: against a 201-point midpoint average (batman's 7-point linspace is coarser).
+            fine = ((np.arange(201) + .5) / 201 - .5) * exposure
+            exact = model.light_curve(theta, (t[:, None] + fine).ravel()).reshape(len(t), -1).mean(1)
+            self.assertLess(np.max(np.abs(model.light_curve(theta) - exact)), 1e-6)
 
     def test_latex_escaping_and_formatting(self):
         self.assertEqual(report.tex('a_b 5% #1'), 'a\\_b 5\\% \\#1')
