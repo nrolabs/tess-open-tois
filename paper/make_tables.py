@@ -186,20 +186,28 @@ high-resolution imaging. All four difference images place the source within 2$''
     likely = sum(1 for f, n, _ in valid_fpp if f < .5 and n < .001)
     nearby = sum(1 for f, n, _ in valid_fpp if n is not None and n > .1)
     offset = sum(1 for *_, px in fpps if px.get('sigma') and px['sigma'] > 4 and (px.get('offset_pixels') or 0) > .5)
+    threshold = json.loads(next((ROOT / 'reports' / 'candidates').glob('*.json')).read_text())['threshold']
+    below = [x for x in inconclusive if not x[2].get('cnn_selected')]
+    selected = [x for x in inconclusive if x[2].get('cnn_selected')]
     write('inconclusive_text.tex', f'''
-{len(inconclusive)} recovered TOIs pass the photometric vetting but score below the classifier
-threshold (calibrated scores {min(x[2].get('cnn_calibrated') or 0 for x in inconclusive):.2f}--{max(x[2].get('cnn_calibrated') or 0 for x in inconclusive):.2f}).
-For this paper, difference images and \\texttt{{TRICERATOPS}} (three runs) were also computed for them
-({len(done)} completed, Table~\\ref{{tab:inconclusive}}). {low} have FPP\\,$<1\\%$ and NFPP\\,$<0.1\\%$,
+{len(inconclusive)} recovered TOIs pass the photometric vetting but are not candidates.
+{len(below)} score below the classifier threshold (raw scores
+{min(x[2].get('cnn_score') or 0 for x in below):.2f}--{max(x[2].get('cnn_score') or 0 for x in below):.3f}, threshold {threshold:.3f}).
+The other {len(selected)} (marked with $\\dagger$ in Table~\\ref{{tab:inconclusive}}) are selected by the classifier,
+but the search \\texttt{{TRICERATOPS}} result falls outside the candidate criterion
+(FPP\\,$\\geq 50\\%$, or $0.1\\% \\leq$\\,NFPP\\,$\\leq 10\\%$).
+For this paper, difference images and \\texttt{{TRICERATOPS}} (three runs) were computed for all of them
+({len(done)} completed). {low} have FPP\\,$<1\\%$ and NFPP\\,$<0.1\\%$,
 {likely} have FPP\\,$<50\\%$ and NFPP\\,$<0.1\\%$, {nearby} have NFPP\\,$>10\\%$ (signal likely from a
-neighbour), and {offset} show a significant difference-image offset. Because the classifier does not
-support them, we do not count them as candidates, but the low-FPP cases are natural follow-up targets.''')
+neighbour), and {offset} show a significant difference-image offset ($>4\\sigma$ and $>0.5$ pixel).
+These signals are not counted as candidates, but the low-FPP cases that lie on target are natural
+follow-up targets.''')
     rows = []
     for toi, t, e, extra in inconclusive:
         f = (extra or {}).get('fpp') or {}
         px = (extra or {}).get('pixel_test') or {}
         m = e.get('metrics') or {}
-        rows.append(' & '.join([f'TOI-{toi}', str(t), f"{e['period_days']:.4f}", num(m.get('depth_ppm'), '{:.0f}'),
+        rows.append(' & '.join([f'TOI-{toi}' + ('$^\\dagger$' if e.get('cnn_selected') else ''), str(t), f"{e['period_days']:.4f}", num(m.get('depth_ppm'), '{:.0f}'),
                                 num(m.get('snr'), '{:.1f}'), num(m.get('radius_earth'), '{:.1f}'),
                                 num(e.get('cnn_calibrated'), '{:.2f}'), num(f.get('fpp'), '{:.3f}'),
                                 num(f.get('nfpp'), '{:.0e}'), num(px.get('offset_arcsec'), '{:.1f}'),
@@ -207,7 +215,7 @@ support them, we do not count them as candidates, but the low-FPP cases are natu
     write('inconclusive.tex', '''
 \\startlongtable
 \\begin{deluxetable*}{lcccccccccc}
-\\tablecaption{Recovered open TOIs that pass the vetting but not the classifier.\\label{tab:inconclusive}}
+\\tablecaption{Recovered open TOIs that pass the vetting but are not candidates.\\label{tab:inconclusive}}
 \\tablehead{\\colhead{TOI} & \\colhead{TIC} & \\colhead{$P$ (d)} & \\colhead{Depth (ppm)} & \\colhead{SNR} &
 \\colhead{$R_p$ ($R_\\oplus$)} & \\colhead{CNN} & \\colhead{FPP} & \\colhead{NFPP} & \\colhead{Offset ($''$)} & \\colhead{Offset ($\\sigma$)}}
 \\startdata

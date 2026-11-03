@@ -30,7 +30,10 @@ images, and all have nearby false-positive probabilities below $10^{-6}$
 and false-positive probabilities of 1.7--34\%; none reaches the 1\% level
 required for statistical validation, mainly because their radii (6.7--13.9\,$R_\oplus$) cannot
 exclude low-mass stellar companions without radial velocities. We report limb-darkened transit
-fits for the four, the vetting results of the other recovered TOIs, and \nNew{} signals
+fits for the four and the vetting results of the other recovered TOIs. Difference images and
+false-positive probabilities computed for the vetted TOIs that are not candidates place the sources
+of TOI-4802.01 and TOI-7701.01 off target and give four on-target signals false-positive
+probabilities of 1--5\%. We also list \nNew{} signals
 that pass the photometric vetting but do not match any catalogued TOI, community TOI, published
 planet, SPOC threshold-crossing event or known eclipsing binary. All code and results are public.
 \end{abstract}
@@ -163,7 +166,9 @@ Training uses AdamW with class weighting and early stopping on a validation set.
 Performance is estimated with nested cross-validation grouped by star: each star is in the test fold
 of exactly one of five models, whose weights and threshold are fixed before the test fold is scored.
 The threshold maximizes recall at an empirical precision of 95\%, and the out-of-fold scores are
-calibrated by isotonic regression. Table~\ref{tab:cnn} lists the cross-validated performance; the
+calibrated by isotonic regression. Selection compares the raw ensemble score with the threshold;
+the calibrated score is reported as a probability, and because the isotonic map is a step function,
+selected and unselected signals can share the same calibrated value. Table~\ref{tab:cnn} lists the cross-validated performance; the
 five models form the ensemble used for the search.
 
 \input{tables/cnn.tex}
@@ -196,7 +201,8 @@ an upper bound on the validation strength.
 
 \subsection{Tiers}
 A signal is \emph{rejected} when a vetting test or the pixel test fails or when NFPP\,$>10\%$;
-\emph{inconclusive} when it passes the vetting but not the classifier threshold; a \emph{candidate}
+\emph{inconclusive} when it passes the vetting but not the classifier threshold, or passes both but
+has FPP\,$\geq 50\%$ or $0.1\% \leq$\,NFPP\,$\leq 10\%$; a \emph{candidate}
 when it passes both and has FPP\,$<50\%$ and NFPP\,$<0.1\%$; and \emph{strong} when FPP\,$<1\%$.
 In the search, difference images and \texttt{TRICERATOPS} are only computed for signals selected by
 the classifier; for this paper they were also computed for the inconclusive signals of the open
@@ -220,7 +226,7 @@ Table~\ref{tab:summary} summarizes the outcome. The blind search recovers
 
 \input{tables/summary.tex}
 
-\subsection{Candidates}
+\subsection{Candidates}\label{sec:candidates}
 Four recovered TOIs pass every vetting test and are selected by the classifier
 (Table~\ref{tab:candidates}, Figure~\ref{fig:folded}). The difference images of TOI-3025.01,
 TOI-4674.01 and TOI-7850.01 place the transit source 1.3--2.9$''$ from the target, within
@@ -257,15 +263,35 @@ mark the catalogue position of the target; red plus signs the fitted source of t
 \label{fig:diff}
 \end{figure*}
 
+\clearpage
 \subsection{Inconclusive TOIs}\label{sec:inconclusive}
 \input{tables/inconclusive_text.tex}
 
 \input{tables/inconclusive.tex}
 
+The supplementary tests separate a few cases. TOI-4802.01 ($P=1.72$\,d) is most likely a nearby
+eclipsing binary: the difference-image source lies $12.8''$ from the target at $5\sigma$ and
+NFPP\,$=0.99$. TOI-7701.01 ($P=20.6$\,d) has a low FPP (0.04), but its only significant difference
+image (one transit, sector~106) places the source $93''$ (4.4 pixels) from the target at $8\sigma$; the
+FPP does not account for this, and the signal should be treated as a possible blend until more transits
+are imaged. Among the signals that lie on target, TOI-7465.01, TOI-6464.01, TOI-7825.01 and
+TOI-7713.01 have FPP\,$\approx 1$--$5\%$ and NFPP\,$<0.01\%$ from three runs; TOI-7465.01 is also
+classifier-selected, with a search FPP above the candidate limit. These are the closest to the
+candidate criterion and, after the candidates of Section~\ref{sec:candidates}, the next priority for
+follow-up.
+
 \subsection{Signals not in any catalogue}
 \input{tables/new_text.tex}
 
 \input{tables/new.tex}
+
+Two of these signals are off target: the difference images of TIC~66620917 ($P=0.62$\,d) and
+TIC~81089255 ($P=66.6$\,d) place the source $17''$ ($12\sigma$) and $94''$ ($26\sigma$) from the
+target, so both are attributed to neighbouring stars. The most planet-like is TIC~420529106
+($P=21.96$\,d, four transits, depth 954\,ppm, $R_p\approx2.4\,R_\oplus$, SNR 9.6), with a
+calibrated score of 0.85, FPP\,$=0.03$ and NFPP\,$=0.01$; its difference image is not significant.
+TIC~259606227 ($P=1.06$\,d, $R_p\approx2.8\,R_\oplus$) has FPP\,$=0.07$ but a classifier score of
+0.08. At SNR near 10, both need more data before they can be considered candidates.
 
 \section{Discussion}\label{sec:discussion}
 
@@ -295,7 +321,9 @@ systematic and pixel-level tests, a cross-validated neural network and \texttt{T
 pass every test, three are located on their target stars by difference images, and their FPPs
 are 1.7--34\%. We list the
 results for every recovered TOI and the uncatalogued signals that pass the photometric vetting, as a
-prioritization aid for follow-up observations.
+prioritization aid for follow-up observations: after the four candidates, the on-target TOIs
+TOI-7465.01, TOI-6464.01, TOI-7825.01 and TOI-7713.01 and the uncatalogued signal of TIC~420529106
+are the most promising.
 
 \begin{acknowledgments}
 This paper includes data collected by the TESS mission, funded by the NASA Science Mission
