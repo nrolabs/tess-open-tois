@@ -12,7 +12,7 @@
 
 \author[0000-0002-3986-8048]{Isak Paulo de Andrade Ruas}
 \affiliation{NROLABS}
-\email{isakruas@gmail.com}
+\email[show]{isakruas@gmail.com}
 
 \begin{abstract}
 TESS Objects of Interest (TOIs) without follow-up observations recorded on ExoFOP offer a
@@ -70,11 +70,11 @@ each file. Stellar parameters come from the TIC v8 \citep{Stassun2019}.
 
 \subsection{Open TOIs}
 The ExoFOP TOI table was retrieved on 2026 November 2. We define a TOI as \emph{open} when its TFOP
-working group disposition is PC (or empty) and the numbers of time-series, spectroscopic and imaging
+working-group disposition is PC (or empty) and the numbers of time-series, spectroscopic and imaging
 observations recorded on ExoFOP are all zero. This yields \nOpenAll{} TOIs on
 \nOpenStarsAll{} stars, of which \nStars{} stars
 (\nOpen{} TOIs) have SPOC 120\,s light curves in our data set; the remaining targets are
-outside the scope of this work. The host stars have TESS magnitudes
+outside the scope of this work. The host stars have TESS magnitudes of
 \tmagRange{} and \sectorRange{} sectors of 120\,s data.
 
 \subsection{Training set}
@@ -117,7 +117,7 @@ the periodic signals and every catalogued transit, the light curve is detrended 
 three durations and searched with a matched box filter at every time step for durations of 2--25\,h,
 with the correlated noise of each sector; events with single-event SNR\,$\geq 8$ are refined in time
 and duration. Each event is vetted against data gaps (fail within 0.5\,d), asymmetry between its two
-halves (fail above $4\sigma$ and 30\% of the depth), V shape, the CCD common mode
+halves (fail above $4\sigma$ and 30\% of the depth), a V-shaped profile, the CCD common mode
 (Section~\ref{sec:commonmode}), a centroid test with an empirical significance
 (Section~\ref{sec:centroid}), and a per-star noise ceiling: the same search on the star's inverted
 light curve gives the strongest dip that its own noise produces, and the event must exceed it by
@@ -142,7 +142,7 @@ and the centroid shift.
 For periodic signals, the in-transit shift of the flux-weighted centroid is converted into the
 position of the source that would produce the observed depth, $\Delta c = \delta(c - x_s)/(1-\delta)$,
 and compared with the target position from the world coordinate system of the SPOC aperture, with a
-0.1 pixel systematic floor; a source more than $4\sigma$ and 21$''$ away fails. For single and duo
+0.1-pixel systematic floor; a source more than $4\sigma$ and 21$''$ away fails. For single and duo
 events, whose shifts are not averaged over many transits, the significance is empirical: the shift
 is ranked among the shifts of the same window at every other time of all sectors, with a generalized
 Pareto tail beyond the sample.
@@ -157,7 +157,7 @@ as instrumental.
 The classifier is a one-dimensional convolutional network with four views of the folded light curve
 (global, local, odd/even and secondary phase), each processed by a residual branch, plus 14 scalar
 features from the vetting (depth, SNR, odd--even and secondary significance, ingress fraction,
-duration ratio, number of transits, centroid significance, crowding, stellar radius, log\,$g$,
+duration ratio, number of transits, centroid significance, crowding, stellar radius, $\log g$,
 $T_{\rm eff}$, TESS magnitude and density ratio); the network does not see identifiers, dispositions or
 catalogue planet parameters, and the catalogue ephemeris is only used to align the views. Each
 labelled TOI contributes one example with all sectors and, for training only, one example per sector.
@@ -192,8 +192,8 @@ alone decides.
 \subsection{Difference images}
 For signals that pass the vetting and the classifier, the SPOC target pixel files of up to three
 sectors with transits are downloaded and the mean out-of-transit image minus the mean in-transit
-image is fitted with a Gaussian. Its offset from the target position (same stamp, same WCS, 0.1 pixel
-floor) fails the signal above $4\sigma$ and 0.5 pixel ($\sim$10$''$). On TFOP dispositions this test
+image is fitted with a Gaussian. Its offset from the target position (same stamp, same WCS, 0.1-pixel
+floor) fails the signal above $4\sigma$ and 0.5\,pixel ($\sim$10$''$). On TFOP dispositions this test
 failed 7 of 13 false positives labelled as nearby eclipsing binaries and 0 of 5 confirmed planets with
 a usable difference image.
 
@@ -202,7 +202,7 @@ a usable difference image.
 and the nearby false-positive probability (NFPP) from the folded transit, the TIC and Gaia
 neighbours and the SPOC apertures. We provide the pixel geometry from the aperture extension of the
 local light-curve files instead of TESScut image cutouts; the relative pixel positions agree with
-TESScut to 0.001 pixel. The FPP is a Monte Carlo estimate whose run-to-run scatter is significant:
+TESScut to 0.001\,pixel. The FPP is a Monte Carlo estimate whose run-to-run scatter is significant:
 the search averages three runs, and the candidate analysis averages ten.
 \citet{Giacalone2021} adopt FPP\,$<1.5\%$ and NFPP\,$<0.1\%$ as validation criteria.
 We use the more conservative FPP\,$<1\%$ threshold with the same NFPP limit.
@@ -224,11 +224,11 @@ these additional tests.
 
 \subsection{Transit fits}
 The four candidates are fitted with a quadratic limb-darkened model \citep{Mandel2002} with the
-$q_1,q_2$ parameterization \citep{Kipping2013}, free mid-transit time, period, radius ratio, impact
+$q_1, q_2$ parameterization \citep{Kipping2013}, free mid-transit time, period, radius ratio, impact
 parameter, stellar density, flux offset and white-noise amplitude, assuming circular orbits.
 Priors are uniform in the sampled coordinates: $R_p/R_\star\in(0.001,0.5)$,
 $b\in(0,1.5)$, $\log_{10}[\rho_\star/({\rm g\,cm^{-3}})]\in(-3,2)$,
-$q_1,q_2\in(0,1)$, relative flux offset $f_0\in(-0.01,0.01)$, and
+$q_1, q_2\in(0,1)$, relative flux offset $f_0\in(-0.01,0.01)$, and
 $\ln\sigma\in(-14,-2)$ for relative-flux noise amplitude $\sigma$.
 The mid-transit time is restricted to half an initial transit duration on either side of its
 initial estimate, and the period to $\pm0.1\%$ of its initial estimate. We require
@@ -268,8 +268,7 @@ validation threshold.
 \includegraphics[width=.49\textwidth]{figures/folded_89062142.pdf}
 \includegraphics[width=.49\textwidth]{figures/folded_410056850.pdf}
 \includegraphics[width=.49\textwidth]{figures/folded_219396153.pdf}
-\caption{Phase-folded transits of TOI-3025.01, TOI-4674.01, TOI-7850.01 and TOI-7888.01 (top left
-to bottom right) with the posterior median model; black points are 10-minute bins.}
+\caption{Phase-folded transits of TOI-3025.01 (top left), TOI-4674.01 (top right), TOI-7850.01 (bottom left) and TOI-7888.01 (bottom right) with the posterior median model; black points are 10-minute bins.}
 \label{fig:folded}
 \end{figure*}
 
@@ -278,9 +277,9 @@ to bottom right) with the posterior median model; black points are 10-minute bin
 \includegraphics[width=.49\textwidth]{figures/difference_452464529.pdf}
 \includegraphics[width=.49\textwidth]{figures/difference_89062142.pdf}
 \includegraphics[width=.49\textwidth]{figures/difference_410056850.pdf}
-\caption{Out-of-transit and difference images of TOI-3025.01, TOI-4674.01 and TOI-7850.01 in one
+\caption{Out-of-transit and difference images of TOI-3025.01 (top left), TOI-4674.01 (top right) and TOI-7850.01 (bottom) in one
 sector each (the difference image of TOI-7888.01 is not significant). White crosses
-mark the catalogue position of the target; red plus signs the fitted source of the transit signal.}
+mark the catalogue position of the target; red plus signs mark the fitted source of the transit signal.}
 \label{fig:diff}
 \end{figure*}
 
@@ -293,7 +292,7 @@ mark the catalogue position of the target; red plus signs the fitted source of t
 The supplementary tests separate a few cases. TOI-4802.01 ($P=1.72$\,d) is most likely a nearby
 eclipsing binary: the difference-image source lies $12.8''$ from the target at $5\sigma$ and
 NFPP\,$=0.99$. TOI-7701.01 ($P=20.6$\,d) has a low FPP (0.04), but its only significant difference
-image (one transit, sector~106) places the source $93''$ (4.4 pixels) from the target at $8\sigma$; the
+image (one transit, sector~106) places the source $93''$ (4.4\,pixels) from the target at $8\sigma$; the
 FPP does not account for this, and the signal should be treated as a possible blend until more transits
 are imaged. Both fail the pixel test. Among the signals located on the target, TOI-7465.01, TOI-6464.01, TOI-7825.01 and TOI-7713.01 have
 FPP\,$\approx 1$--$5\%$ and NFPP\,$<0.01\%$ from three runs.
@@ -335,7 +334,9 @@ TOIs is not a population completeness, and the injection tests use trapezoidal s
 
 \textit{Follow-up.} The candidates are suitable for reconnaissance spectroscopy, which would identify
 eclipsing binaries through radial-velocity variations of kilometres per second, and for
-high-resolution imaging, which would constrain close companions and inform revised FPPs.
+high-resolution imaging, which would constrain close companions and inform revised FPPs. In
+particular, TOI-3025.01 ($\mathrm{FPP}=1.7\pm0.4\%$) is close to the statistical validation threshold
+and represents the highest-priority target among the four candidates.
 
 \section{Conclusions}\label{sec:conclusions}
 A pipeline that combines a blind periodic and long-period search, photometric, centroid,
@@ -364,10 +365,10 @@ the California Institute of Technology under contract with NASA.
 
 \facilities{TESS, MAST, ExoFOP}
 
-\software{astropy \citep{Astropy2022}, batman \citep{Kreidberg2015}, emcee \citep{ForemanMackey2013},
-lightkurve \citep{Lightkurve2018}, numpy \citep{Harris2020}, PyTorch \citep{Paszke2019},
-scikit-learn \citep{Pedregosa2011}, scipy \citep{Virtanen2020}, TRICERATOPS \citep{Giacalone2021},
-pytransit \citep{Parviainen2015}}
+\software{\texttt{astropy} \citep{Astropy2022}, \texttt{batman} \citep{Kreidberg2015}, \texttt{emcee} \citep{ForemanMackey2013},
+\texttt{lightkurve} \citep{Lightkurve2018}, \texttt{numpy} \citep{Harris2020}, \texttt{PyTorch} \citep{Paszke2019},
+\texttt{scikit-learn} \citep{Pedregosa2011}, \texttt{scipy} \citep{Virtanen2020}, \texttt{TRICERATOPS} \citep{Giacalone2021},
+\texttt{pytransit} \citep{Parviainen2015}}
 
 \bibliographystyle{aasjournalv7}
 \bibliography{references}

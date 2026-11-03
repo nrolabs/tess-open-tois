@@ -31,6 +31,23 @@ def pm(entry, digits):
     return f'${v:.{digits}f}^{{+{hi:.{digits}f}}}_{{-{lo:.{digits}f}}}$'
 
 
+def exp_tex(x):
+    if x is None or (isinstance(x, float) and not np.isfinite(x)):
+        return '--'
+    if x == 0 or x < 1e-15:
+        return '$0$'
+    if x >= 0.005:
+        return f'{x:.2g}'
+    exp = int(np.floor(np.log10(x)))
+    coeff = round(x / (10.0 ** exp))
+    if coeff >= 10:
+        coeff = 1
+        exp += 1
+    if coeff == 1:
+        return f'$1\\times 10^{{{exp}}}$'
+    return f'${coeff}\\times 10^{{{exp}}}$'
+
+
 def sample():
     open_tois = {int(t): v for t, v in json.loads((ROOT / 'data' / 'open.json').read_text()).items()}
     exo = {r['TOI']: r for r in csv.DictReader(open(ROOT / 'data' / 'catalogs' / 'exofop_toi.csv'))}
@@ -66,7 +83,7 @@ def main():
 \\newcommand{{\\nNew}}{{{len(new)}}}
 \\newcommand{{\\nOpenAll}}{{{sum(len(v) for v in open_tois.values())}}}
 \\newcommand{{\\nOpenStarsAll}}{{{len(open_tois)}}}
-\\newcommand{{\\tmagRange}}{{of {min(tmags):.1f}--{max(tmags):.1f} (median {np.median(tmags):.1f})}}
+\\newcommand{{\\tmagRange}}{{{min(tmags):.1f}--{max(tmags):.1f} (median {np.median(tmags):.1f})}}
 \\newcommand{{\\sectorRange}}{{{min(sectors)}--{max(sectors)} (median {np.median(sectors):.0f})}}
 \\newcommand{{\\trainStars}}{{{training['stars']}}}
 ''')
@@ -152,7 +169,7 @@ The precision interval is the Wilson 95\\% interval.}}
             pm(p['period'], 5), pm(p['k'], 4), pm(p['b'], 2), pm(d['duration_hours'], 2),
             pm(d['radius_earth'], 1), pm(d['teq_k'], 0) if 'teq_k' in d else '--',
             f"{s['event'].get('cnn_calibrated', 0):.2f}", f"{f.get('fpp', 0) * 100:.1f} $\\pm$ {f.get('fpp_error_of_mean', 0) * 100:.1f}",
-            num(f.get('nfpp'), '{:.0e}'), num(pixel.get('offset_arcsec'), '{:.1f}')]) + ' \\\\')
+            exp_tex(f.get('nfpp')), num(pixel.get('offset_arcsec'), '{:.1f}')]) + ' \\\\')
         FIGURES.mkdir(parents=True, exist_ok=True)
         shutil.copy(folder / 'folded.pdf', FIGURES / f'folded_{t}.pdf')
         if (folder / 'difference_image.pdf').exists():
@@ -190,14 +207,14 @@ high-resolution imaging. Three significant difference images are consistent with
     below = [x for x in inconclusive if not x[2].get('cnn_selected')]
     selected = [x for x in inconclusive if x[2].get('cnn_selected')]
     write('inconclusive_text.tex', f'''
-{len(inconclusive)} recovered TOIs passed the photometric vetting and were initially classified as inconclusive.
-{len(below)} score below the classifier threshold (raw scores
+A total of {len(inconclusive)} recovered TOIs passed the photometric vetting and were initially classified as inconclusive.
+Of these, {len(below)} score below the classifier threshold (raw scores
 {min(x[2].get('cnn_score') or 0 for x in below):.2f}--{max(x[2].get('cnn_score') or 0 for x in below):.3f}, threshold {threshold:.3f}).
 The other {len(selected)} (marked with $\\dagger$ in Table~\\ref{{tab:inconclusive}}) are selected by the classifier,
 but the search \\texttt{{TRICERATOPS}} result falls outside the candidate criterion
 (FPP\\,$\\geq 50\\%$, or $0.1\\% \\leq$\\,NFPP\\,$\\leq 10\\%$).
 Difference images and \\texttt{{TRICERATOPS}} (three runs) were computed for {'all of them' if len(done) == len(inconclusive) else f'{len(done)} of them'}. {'None has' if low == 0 else str(low) + ' have'} FPP\\,$<1\\%$ and NFPP\\,$<0.1\\%$,
-{likely} have FPP\\,$<50\\%$ and NFPP\\,$<0.1\\%$, {nearby} have NFPP\\,$>10\\%$ (signal likely from a
+while {likely} have FPP\\,$<50\\%$ and NFPP\\,$<0.1\\%$, {nearby} have NFPP\\,$>10\\%$ (signal likely from a
 neighbour), and {offset} show a significant difference-image offset ($>4\\sigma$ and $>0.5$ pixel).
 Signals above the NFPP or offset limits would be rejected by these tests; they are kept in the
 table to show the full group.''')
@@ -209,7 +226,7 @@ table to show the full group.''')
         rows.append(' & '.join([f'TOI-{toi}' + ('$^\\dagger$' if e.get('cnn_selected') else ''), str(t), f"{e['period_days']:.4f}", num(m.get('depth_ppm'), '{:.0f}'),
                                 num(m.get('snr'), '{:.1f}'), num(m.get('radius_earth'), '{:.1f}'),
                                 num(e.get('cnn_calibrated'), '{:.2f}'), num(f.get('fpp'), '{:.3f}'),
-                                num(f.get('nfpp'), '{:.0e}'), num(px.get('offset_arcsec'), '{:.1f}'),
+                                exp_tex(f.get('nfpp')), num(px.get('offset_arcsec'), '{:.1f}'),
                                 num(px.get('sigma'), '{:.1f}')]) + ' \\\\')
     write('inconclusive.tex', '''
 \\startlongtable
@@ -238,14 +255,15 @@ image not significant. Membership in this table follows the initial search tier;
                                 f"{e['duration_hours']:.2f}", num(m.get('depth_ppm'), '{:.0f}'), num(m.get('snr'), '{:.1f}'),
                                 num(m.get('transits'), '{}'), num(m.get('radius_earth'), '{:.1f}'),
                                 num(e.get('cnn_calibrated'), '{:.2f}'), num(f.get('fpp'), '{:.3f}'),
-                                num(f.get('nfpp'), '{:.0e}'), num(px.get('offset_arcsec'), '{:.1f}')]) + ' \\\\')
+                                exp_tex(f.get('nfpp')), num(px.get('offset_arcsec'), '{:.1f}')]) + ' \\\\')
     write('new_text.tex', f'''
-{len(new)} signals in these stars pass the photometric vetting but match no catalogued signal
+A total of {len(new)} signals in these stars pass the photometric vetting but match no catalogued signal
 (Table~\\ref{{tab:new}}). None is selected by the classifier. Each lies in the host star of an open
 TOI and does not coincide with it in period or phase; they are listed with the same supplementary
 tests as a starting point for inspection, not as planet candidates.''')
     write('new.tex', '''
 \\startlongtable
+\\setlength{\\tabcolsep}{3.5pt}
 \\begin{deluxetable*}{lcccccccccccc}
 \\tabletypesize{\\scriptsize}
 \\tablecaption{Signals that pass the photometric vetting and match no catalogued signal.\\label{tab:new}}
